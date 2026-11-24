@@ -93,6 +93,24 @@ fun simulateRoles(gamesPerSize: Int, config: GameConfig, random: Random, bot: Bo
     return played.map { (role, games) -> RoleStats(role, games, won[role] ?: 0) }.sortedBy { it.role.ordinal }
 }
 
+// How much a setup's town win rate moves with each role, against the mean of setups with the same
+// player and mafia count. Each setup is played `gamesPerSetup` times.
+fun simulateRoleEffects(gamesPerSetup: Int, config: GameConfig, random: Random, bot: Bot): Map<RoleId, Double> {
+    val results = mutableListOf<Triple<Pair<Int, Int>, List<RoleId>, Double>>()
+    for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
+        for (setup in RoleSetups.combinations(n)) {
+            val stats = simulateGames(n, gamesPerSetup, bot) {
+                Game.withRoles(RoleSetups.build(n, setup).shuffled(random), config, random)
+            }
+            results += Triple(n to setup.mafia, setup.specials, stats.townPercent)
+        }
+    }
+    val baseline = results.groupBy({ it.first }, { it.third }).mapValues { it.value.average() }
+    val deltas = mutableMapOf<RoleId, MutableList<Double>>()
+    for ((key, specials, town) in results) specials.forEach { deltas.getOrPut(it) { mutableListOf() } += town - baseline.getValue(key) }
+    return deltas.mapValues { it.value.average() }
+}
+
 fun simulate(
     playerCount: Int,
     games: Int,

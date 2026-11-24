@@ -17,6 +17,13 @@ private const val SHOOT_THRESHOLD = 6.0
 class InformedBot(
     private val random: Random,
     private val bluffChance: Double = 0.5,
+    // How much town believes unproven claims (0..1) and how much random wobble their choices get.
+    private val trust: Double = 1.0,
+    private val noise: Double = 0.0,
+    // Chance per day that the detective and the lookout share what they know; 1 = always.
+    private val candor: Double = 1.0,
+    // Chance that a bluffing mafioso also vouches for a teammate ("not mafia").
+    private val cunning: Double = 0.0,
 ) : Bot {
 
     override fun chooseNightTarget(view: PlayerView): PlayerId? {
@@ -34,11 +41,11 @@ class InformedBot(
             RoleId.DETECTIVE -> {
                 val checked = view.investigations.map { it.targetId }.toSet()
                 val pool = options.filter { it !in checked }.ifEmpty { options }
-                pickHighest(assess(view).suspicion, pool)
+                pickHighest(assess(view, trust).suspicion, pool)
             }
 
             RoleId.DOCTOR, RoleId.BODYGUARD, RoleId.LOOKOUT -> {
-                val credibility = assess(view).credibility
+                val credibility = assess(view, trust).credibility
                 val accusers = view.claims.filter { it.claimsMafia && it.speakerId in options }.map { it.speakerId }
                 val best = accusers.maxOfOrNull { credibility[it] ?: 0.0 }
                 accusers.filter { credibility[it] == best && best != 0.0 }.randomOrNull(random)
@@ -58,7 +65,7 @@ class InformedBot(
                 ?: options.filter { it !in view.mafiaTeammates }.randomOrNull(random)
                 ?: options.random(random)
         }
-        return pickHighest(assess(view).suspicion, options)
+        return pickHighest(assess(view, trust).suspicion, options)
     }
 
     override fun chooseClaims(view: PlayerView): List<ClaimIntent> = when (view.role) {
@@ -73,7 +80,7 @@ class InformedBot(
     override fun chooseShot(view: PlayerView): PlayerId? {
         val options = view.legalShotTargets
         if (options.isEmpty()) return null
-        val scores = assess(view).suspicion
+        val scores = assess(view, trust).suspicion
         val best = options.maxOf { scores[it] ?: 0.0 }
         return if (best >= SHOOT_THRESHOLD) pickHighest(scores, options) else null
     }
@@ -87,15 +94,20 @@ class InformedBot(
         return listOf(ClaimIntent(target, true))
     }
 
+    private fun silentToday() = candor < 1.0 && random.nextDouble() >= candor
+
     private fun announceResults(view: PlayerView): List<ClaimIntent> {
+        if (silentToday()) return emptyList()
         val already = claimedBy(view, view.selfId)
         return view.investigations
             .filter { it.targetId !in already }
+            .distinctBy { it.targetId }
             .map { ClaimIntent(it.targetId, it.isMafia) }
     }
 
     // Whoever visited a player who was killed that night is probably the killer.
     private fun accuseVisitors(view: PlayerView): List<ClaimIntent> {
+        if (silentToday()) return emptyList()
         val already = claimedBy(view, view.selfId)
         return view.sightings
             .filter { it.targetId in view.nightDeaths[it.night].orEmpty() }
@@ -113,7 +125,13 @@ class InformedBot(
         val target = accuser
             ?: view.alive.filter { it !in team && it !in already }.randomOrNull(random)
             ?: return emptyList()
-        return listOf(ClaimIntent(target, true))
+        val vouch = if (cunning > 0.0 && random.nextDouble() < cunning) {
+            view.mafiaTeammates.filter { it in view.alive && it !in already }.randomOrNull(random)
+                ?.let { ClaimIntent(it, false) }
+        } else {
+            null
+        }
+        return listOfNotNull(ClaimIntent(target, true), vouch)
     }
 
     private fun accusersOfMafia(view: PlayerView): List<PlayerId> {
@@ -125,7 +143,8 @@ class InformedBot(
         view.claims.filter { it.speakerId == speaker }.map { it.targetId }.toSet()
 
     private fun pickHighest(scores: Map<PlayerId, Double>, pool: List<PlayerId>): PlayerId {
-        val max = pool.maxOf { scores[it] ?: 0.0 }
-        return pool.filter { (scores[it] ?: 0.0) == max }.random(random)
+        val shown = pool.associateWith { (scores[it] ?: 0.0) + if (noise > 0.0) noise * (random.nextDouble() * 2 - 1) else 0.0 }
+        val max = shown.values.max()
+        return pool.filter { shown.getValue(it) == max }.random(random)
     }
 }

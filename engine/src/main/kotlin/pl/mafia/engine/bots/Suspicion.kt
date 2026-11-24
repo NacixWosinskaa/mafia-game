@@ -19,7 +19,8 @@ private const val SIGHTING_WEIGHT = 4.0
 // Town-side reasoning. Town players never lie, so a claim that contradicts what the viewer
 // knows (own faction, own investigations, revealed roles) proves the speaker is mafia,
 // and every claim from a player later revealed as town is trusted fully.
-internal fun assess(view: PlayerView): Assessment {
+// `trust` scales how much other claims and sightings count (1 = fully).
+internal fun assess(view: PlayerView, trust: Double = 1.0): Assessment {
     val suspicion = view.alive.filter { it != view.selfId }.associateWith { 0.0 }.toMutableMap()
     fun add(id: PlayerId, delta: Double) {
         if (id in suspicion) suspicion[id] = suspicion.getValue(id) + delta
@@ -56,7 +57,7 @@ internal fun assess(view: PlayerView): Assessment {
     for (claim in view.claims) {
         if (knownMafia(claim.targetId) != null) continue
         val sign = if (claim.claimsMafia) 1.0 else -1.0
-        val delta = if (revealedTown(claim.speakerId)) CERTAIN else CLAIM_WEIGHT * credibility.getValue(claim.speakerId)
+        val delta = if (revealedTown(claim.speakerId)) CERTAIN else CLAIM_WEIGHT * trust * credibility.getValue(claim.speakerId)
         add(claim.targetId, sign * delta)
     }
 
@@ -70,7 +71,7 @@ internal fun assess(view: PlayerView): Assessment {
 
     for (sighting in view.sightings) {
         if (sighting.targetId in view.nightDeaths[sighting.night].orEmpty()) {
-            sighting.visitorIds.forEach { add(it, SIGHTING_WEIGHT) }
+            sighting.visitorIds.forEach { add(it, SIGHTING_WEIGHT * trust) }
         }
     }
 
