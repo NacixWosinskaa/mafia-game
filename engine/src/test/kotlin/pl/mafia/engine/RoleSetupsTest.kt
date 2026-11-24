@@ -8,26 +8,26 @@ import kotlin.test.assertTrue
 class RoleSetupsTest {
 
     @Test
-    fun `sklad ma dokladnie tylu graczy ile trzeba`() {
+    fun `setup size matches player count`() {
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
-            assertEquals(n, RoleSetups.forPlayers(n).size, "liczba ról dla $n graczy")
+            assertEquals(n, RoleSetups.forPlayers(n).size, "roles for $n players")
         }
     }
 
     @Test
-    fun `kazdy sklad ma po jednym detektywie i lekarzu oraz mafie mniejsza niz polowa`() {
+    fun `every setup has one detective, one doctor and a mafia minority`() {
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
             val roles = RoleSetups.forPlayers(n)
-            assertEquals(1, roles.count { it == RoleId.DETECTIVE }, "detektyw dla $n")
-            assertEquals(1, roles.count { it == RoleId.DOCTOR }, "lekarz dla $n")
+            assertEquals(1, roles.count { it == RoleId.DETECTIVE }, "detectives for $n")
+            assertEquals(1, roles.count { it == RoleId.DOCTOR }, "doctors for $n")
             val mafia = roles.count { it == RoleId.MAFIOSO }
-            assertTrue(mafia >= 1, "co najmniej jeden mafioso dla $n")
-            assertTrue(mafia * 2 < n, "mafia musi być mniejszością dla $n")
+            assertTrue(mafia >= 1, "at least one mafioso for $n")
+            assertTrue(mafia * 2 < n, "mafia must be a minority for $n")
         }
     }
 
     @Test
-    fun `liczba graczy poza zakresem jest odrzucana`() {
+    fun `player count outside the range is rejected`() {
         assertFailsWith<IllegalArgumentException> { RoleSetups.forPlayers(5) }
         assertFailsWith<IllegalArgumentException> { RoleSetups.forPlayers(13) }
     }

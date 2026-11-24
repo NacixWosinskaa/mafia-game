@@ -23,7 +23,7 @@ fun playGame(playerCount: Int, config: GameConfig, random: Random, bot: Bot): Ga
     val game = Game.create(playerCount, config, random)
     var rounds = 0
     while (!game.isOver) {
-        check(++rounds < 500) { "Gra nie kończy się, więc w zasadach jest błąd" }
+        check(++rounds < 500) { "Game does not terminate, the rules have a bug" }
 
         for (player in game.alivePlayers()) {
             if (game.legalNightTargets(player.id).isEmpty()) continue

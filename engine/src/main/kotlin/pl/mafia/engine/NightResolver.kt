@@ -13,13 +13,7 @@ data class NightResult(
     val investigations: List<Investigation>,
 )
 
-/**
- * Czysta funkcja rozstrzygająca noc. Kolejność (priorytety):
- *  1. ochrona, 2. zabójstwo, 3. śledztwa.
- * Nowe role z akcjami nocnymi wpinamy tutaj, ustalając ich miejsce w kolejności.
- *
- * Zakłada, że akcje zostały już zwalidowane przez [Game].
- */
+// Resolution order: protect, kill, investigate. Actions are validated by Game beforehand.
 object NightResolver {
 
     fun resolve(
@@ -35,10 +29,8 @@ object NightResolver {
                 actor != null && actor.alive && actor.definition.nightAction == type
             }.toList()
 
-        // 1. Ochrona
         val protectedIds = actionsOf(NightActionType.PROTECT).map { it.second }.toSet()
 
-        // 2. Zabójstwo: mafia wybiera cel większością; remis rozstrzyga najniższe id
         val attacked = if (killAllowed) {
             pluralityTarget(actionsOf(NightActionType.KILL).map { it.second })
         } else {
@@ -47,7 +39,7 @@ object NightResolver {
         val prevented = attacked?.takeIf { it in protectedIds }
         val deaths = if (attacked != null && prevented == null) listOf(attacked) else emptyList()
 
-        // 3. Śledztwa: wynik zależy od frakcji celu, także gdy cel lub detektyw zginął tej nocy
+        // Results depend only on the target's faction, so they survive the detective's or target's death.
         val investigations = actionsOf(NightActionType.INVESTIGATE)
             .map { (detectiveId, targetId) ->
                 Investigation(detectiveId, targetId, byId.getValue(targetId).faction == Faction.MAFIA)
@@ -57,6 +49,7 @@ object NightResolver {
         return NightResult(attacked, deaths, prevented, investigations)
     }
 
+    // Ties go to the lowest player id to keep resolution deterministic.
     private fun pluralityTarget(targets: List<PlayerId>): PlayerId? {
         if (targets.isEmpty()) return null
         val counts = targets.groupingBy { it }.eachCount()

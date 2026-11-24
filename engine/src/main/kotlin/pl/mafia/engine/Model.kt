@@ -2,18 +2,12 @@ package pl.mafia.engine
 
 typealias PlayerId = Int
 
-/** Frakcja decyduje o tym, po czyjej stronie gra dana postać i jak wygrywa. */
 enum class Faction { TOWN, MAFIA, NEUTRAL }
 
-/** Mechaniczna nazwa roli. Nazwy "fabularne" (skiny) dojdą w warstwie lore. */
 enum class RoleId { CITIZEN, MAFIOSO, DETECTIVE, DOCTOR }
 
 enum class NightActionType { KILL, PROTECT, INVESTIGATE }
 
-/**
- * Rola opisana jako dane. Dodanie nowej roli to nowy wpis w [Roles],
- * a nie przepisywanie gry.
- */
 data class RoleDefinition(
     val id: RoleId,
     val faction: Faction,

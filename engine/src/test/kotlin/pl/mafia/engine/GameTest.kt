@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class GameTest {
 
-    // id: 0 mafioso, 1 lekarz, 2 detektyw, 3-5 obywatele
+    // 0 mafioso, 1 doctor, 2 detective, 3-5 citizens
     private val roles = listOf(
         RoleId.MAFIOSO, RoleId.DOCTOR, RoleId.DETECTIVE,
         RoleId.CITIZEN, RoleId.CITIZEN, RoleId.CITIZEN,
@@ -21,7 +21,7 @@ class GameTest {
     }
 
     @Test
-    fun `domyslnie pierwsza noc jest bez zabojstwa`() {
+    fun `first night has no kill by default`() {
         val g = game()
         g.submitNightAction(0, 3)
         g.resolveNight()
@@ -30,7 +30,7 @@ class GameTest {
     }
 
     @Test
-    fun `po wlaczeniu opcji mafia zabija juz pierwszej nocy`() {
+    fun `mafia can kill on the first night when enabled`() {
         val g = game(GameConfig(killOnFirstNight = true))
         g.submitNightAction(0, 3)
         g.resolveNight()
@@ -39,7 +39,7 @@ class GameTest {
     }
 
     @Test
-    fun `lekarz ratuje ofiare`() {
+    fun `doctor saves the victim`() {
         val g = game(GameConfig(killOnFirstNight = true))
         g.submitNightAction(0, 3)
         g.submitNightAction(1, 3)
@@ -49,19 +49,21 @@ class GameTest {
     }
 
     @Test
-    fun `mafia nie moze zabic swojego`() {
-        val g = Game.withRoles(listOf(RoleId.MAFIOSO, RoleId.MAFIOSO, RoleId.CITIZEN, RoleId.CITIZEN, RoleId.CITIZEN, RoleId.CITIZEN))
+    fun `mafia cannot target its own`() {
+        val g = Game.withRoles(
+            listOf(RoleId.MAFIOSO, RoleId.MAFIOSO, RoleId.CITIZEN, RoleId.CITIZEN, RoleId.CITIZEN, RoleId.CITIZEN),
+        )
         assertFailsWith<IllegalArgumentException> { g.submitNightAction(0, 1) }
     }
 
     @Test
-    fun `obywatel nie ma akcji nocnej`() {
+    fun `citizen has no night action`() {
         val g = game()
         assertFailsWith<IllegalArgumentException> { g.submitNightAction(3, 0) }
     }
 
     @Test
-    fun `detektyw dostaje wynik sledztwa w swoim widoku`() {
+    fun `detective result is only in the detective's view`() {
         val g = game()
         g.submitNightAction(2, 0)
         g.resolveNight()
@@ -70,7 +72,7 @@ class GameTest {
     }
 
     @Test
-    fun `widok obywatela nie zdradza rol innych graczy`() {
+    fun `citizen view does not reveal other roles`() {
         val g = game()
         val view = g.viewFor(3)
         assertEquals(RoleId.CITIZEN, view.role)
@@ -79,7 +81,7 @@ class GameTest {
     }
 
     @Test
-    fun `lekarz nie moze chronic tej samej osoby dwie noce z rzedu`() {
+    fun `doctor cannot protect the same player two nights in a row`() {
         val g = game()
         g.submitNightAction(1, 3)
         g.resolveNight()
@@ -88,18 +90,18 @@ class GameTest {
         assertEquals(Phase.NIGHT, g.phase)
         val targets = g.legalNightTargets(1)
         assertFalse(3 in targets)
-        assertTrue(1 in targets, "lekarz może chronić siebie")
+        assertTrue(1 in targets, "doctor can protect themselves")
         assertFailsWith<IllegalArgumentException> { g.submitNightAction(1, 3) }
     }
 
     @Test
-    fun `lekarz moze chronic siebie tylko gdy pozwala na to konfiguracja`() {
+    fun `doctor self-protection follows the config`() {
         val g = game(GameConfig(doctorCanSelfProtect = false))
         assertFalse(1 in g.legalNightTargets(1))
     }
 
     @Test
-    fun `wiekszosc glosow egzekuje gracza`() {
+    fun `most votes executes a player`() {
         val g = game()
         g.resolveNight()
         g.everyoneVotes { id -> if (id == 3) 0 else 3 }
@@ -109,10 +111,9 @@ class GameTest {
     }
 
     @Test
-    fun `remis oznacza brak egzekucji`() {
+    fun `a tie means no execution`() {
         val g = game()
         g.resolveNight()
-        // 3 głosy na gracza 1, 3 głosy na gracza 0
         g.everyoneVotes { id -> if (id in listOf(0, 2, 4)) 1 else 0 }
         g.resolveDay()
         assertEquals(6, g.alivePlayers().size)
@@ -120,7 +121,7 @@ class GameTest {
     }
 
     @Test
-    fun `remis moze byc rozstrzygany losowo po zmianie konfiguracji`() {
+    fun `a tie can be broken randomly when configured`() {
         val g = game(GameConfig(tieRule = TieRule.RANDOM_AMONG_TIED))
         g.resolveNight()
         g.everyoneVotes { id -> if (id in listOf(0, 2, 4)) 1 else 0 }
@@ -129,7 +130,7 @@ class GameTest {
     }
 
     @Test
-    fun `glosy na nikogo nie egzekuja nikogo`() {
+    fun `votes for nobody execute nobody`() {
         val g = game()
         g.resolveNight()
         g.everyoneVotes { null }
@@ -139,7 +140,7 @@ class GameTest {
     }
 
     @Test
-    fun `miasto wygrywa po straceniu ostatniego mafiosa`() {
+    fun `town wins when the last mafioso is executed`() {
         val g = game()
         g.resolveNight()
         g.everyoneVotes { id -> if (id == 0) 1 else 0 }
@@ -149,7 +150,7 @@ class GameTest {
     }
 
     @Test
-    fun `mafia wygrywa gdy ma co najmniej tyle osob co reszta`() {
+    fun `mafia wins when it matches the rest in numbers`() {
         val g = Game.withRoles(
             listOf(RoleId.MAFIOSO, RoleId.MAFIOSO, RoleId.CITIZEN, RoleId.CITIZEN),
             GameConfig(killOnFirstNight = true),
@@ -161,7 +162,7 @@ class GameTest {
     }
 
     @Test
-    fun `po zakonczeniu gry nie mozna juz nic zglaszac`() {
+    fun `nothing can be submitted after the game ends`() {
         val g = game()
         g.resolveNight()
         g.everyoneVotes { id -> if (id == 0) 1 else 0 }

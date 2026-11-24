@@ -2,10 +2,7 @@ package pl.mafia.engine
 
 import kotlin.random.Random
 
-/**
- * Wiedza jednego gracza w danym momencie. Boty (i później klienci sieciowi)
- * dostają wyłącznie widok, nigdy pełny stan gry, żeby nie dało się podejrzeć cudzych ról.
- */
+// What a single player knows. Bots and network clients get this, never the full game state.
 data class PlayerView(
     val selfId: PlayerId,
     val role: RoleId,
@@ -13,20 +10,15 @@ data class PlayerView(
     val phase: Phase,
     val alive: List<PlayerId>,
     val mafiaTeammates: List<PlayerId>,
-    /** Cel zabójstwa wybrany już tej nocy przez kogoś z drużyny (widzą go tylko mafiosi). */
     val teammateKillChoice: PlayerId?,
     val legalNightTargets: List<PlayerId>,
     val legalVoteTargets: List<PlayerId>,
     val investigations: List<Investigation>,
-    /** Role ujawnione po śmierci (zabici i straceni). */
     val revealedRoles: Map<PlayerId, RoleId>,
 )
 
-/**
- * Maszyna stanów gry: noc -> rozstrzygnięcie -> dzień (głosowanie) -> egzekucja -> warunek wygranej.
- * Nie zna czasu rzeczywistego, sieci ani interfejsu: ktoś z zewnątrz zgłasza akcje
- * i wywołuje [resolveNight] / [resolveDay].
- */
+// Night -> resolve -> day (vote) -> execution -> win check. No clocks, network or UI;
+// callers submit actions and trigger resolveNight() / resolveDay().
 class Game private constructor(
     names: List<String>,
     roles: List<RoleId>,
@@ -54,19 +46,16 @@ class Game private constructor(
     val isOver: Boolean get() = phase == Phase.FINISHED
 
     init {
-        require(names.size == roles.size) { "Liczba nazw musi się zgadzać z liczbą ról" }
+        require(names.size == roles.size) { "Names and roles must have the same size" }
         _events += GameEvent.GameStarted(roles.size)
         _events += GameEvent.NightBegan(day)
     }
 
     fun player(id: PlayerId): Player =
-        _players.getOrNull(id) ?: throw IllegalArgumentException("Nie ma gracza o id $id")
+        _players.getOrNull(id) ?: throw IllegalArgumentException("No player with id $id")
 
     fun alivePlayers(): List<Player> = _players.filter { it.alive }
 
-    // ---------------------------------------------------------------- noc
-
-    /** Cele dozwolone dla gracza tej nocy. Pusta lista = gracz nie ma teraz akcji. */
     fun legalNightTargets(actorId: PlayerId): List<PlayerId> {
         val actor = player(actorId)
         if (phase != Phase.NIGHT || !actor.alive) return emptyList()
@@ -83,19 +72,18 @@ class Game private constructor(
     }
 
     fun submitNightAction(actorId: PlayerId, targetId: PlayerId) {
-        check(phase == Phase.NIGHT) { "Akcje nocne można zgłaszać tylko w nocy" }
+        check(phase == Phase.NIGHT) { "Night actions can only be submitted at night" }
         require(targetId in legalNightTargets(actorId)) {
-            "Niedozwolony cel $targetId dla gracza $actorId"
+            "Illegal target $targetId for player $actorId"
         }
         nightActions[actorId] = targetId
     }
 
     fun resolveNight() {
-        check(phase == Phase.NIGHT) { "Teraz nie jest noc" }
+        check(phase == Phase.NIGHT) { "It is not night" }
         val killAllowed = day > 1 || config.killOnFirstNight
         val result = NightResolver.resolve(_players, nightActions, killAllowed)
 
-        // Pamięć lekarza: brak akcji kasuje ograniczenie "nie dwa razy z rzędu"
         _players.filter { it.alive && it.definition.nightAction == NightActionType.PROTECT }.forEach { doctor ->
             val target = nightActions[doctor.id]
             if (target != null) lastProtected[doctor.id] = target else lastProtected.remove(doctor.id)
@@ -115,25 +103,23 @@ class Game private constructor(
         }
     }
 
-    // ---------------------------------------------------------------- dzień
-
     fun legalVoteTargets(voterId: PlayerId): List<PlayerId> {
         if (phase != Phase.DAY || !player(voterId).alive) return emptyList()
         return alivePlayers().map { it.id }.filter { it != voterId }
     }
 
-    /** [targetId] == null oznacza głos "na nikogo". Ponowne zgłoszenie zmienia głos. */
+    // A null target is a vote for nobody. Submitting again replaces the previous vote.
     fun submitVote(voterId: PlayerId, targetId: PlayerId?) {
-        check(phase == Phase.DAY) { "Głosować można tylko w dzień" }
-        require(player(voterId).alive) { "Martwy gracz $voterId nie może głosować" }
+        check(phase == Phase.DAY) { "Votes can only be submitted during the day" }
+        require(player(voterId).alive) { "Dead player $voterId cannot vote" }
         if (targetId != null) {
-            require(targetId in legalVoteTargets(voterId)) { "Niedozwolony cel głosu $targetId" }
+            require(targetId in legalVoteTargets(voterId)) { "Illegal vote target $targetId" }
         }
         votes[voterId] = targetId
     }
 
     fun resolveDay() {
-        check(phase == Phase.DAY) { "Teraz nie jest dzień" }
+        check(phase == Phase.DAY) { "It is not day" }
         val tally: Map<PlayerId?, Int> = votes.values.groupingBy { it }.eachCount()
         _events += GameEvent.VotesTallied(tally)
 
@@ -168,8 +154,6 @@ class Game private constructor(
             _events += GameEvent.PlayerExecuted(chosen, victim.role)
         }
     }
-
-    // ---------------------------------------------------------------- wspólne
 
     private fun kill(id: PlayerId) {
         val victim = player(id)
@@ -227,20 +211,19 @@ class Game private constructor(
     }
 
     companion object {
-        /** Nowa gra dla 6-12 graczy ze składem z [RoleSetups], role losowo rozdzielone. */
         fun create(
             playerCount: Int,
             config: GameConfig = GameConfig(),
             random: Random = Random.Default,
-            names: List<String> = List(playerCount) { "Gracz ${it + 1}" },
+            names: List<String> = List(playerCount) { "Player ${it + 1}" },
         ): Game = Game(names, RoleSetups.forPlayers(playerCount).shuffled(random), config, random)
 
-        /** Gra z ręcznie ustawionymi rolami (id = indeks na liście). Głównie do testów. */
+        // Roles are assigned by list index (id = index). Mainly for tests.
         fun withRoles(
             roles: List<RoleId>,
             config: GameConfig = GameConfig(),
             random: Random = Random.Default,
-            names: List<String> = List(roles.size) { "Gracz ${it + 1}" },
+            names: List<String> = List(roles.size) { "Player ${it + 1}" },
         ): Game = Game(names, roles, config, random)
     }
 }

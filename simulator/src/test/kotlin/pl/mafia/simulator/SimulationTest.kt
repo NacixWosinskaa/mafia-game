@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 class SimulationTest {
 
     @Test
-    fun `kazda gra z botami losowymi sie konczy bez bledow`() {
+    fun `random bots finish every game without errors`() {
         val random = Random(1)
         val bot = RandomBot(random)
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
@@ -22,7 +22,7 @@ class SimulationTest {
     }
 
     @Test
-    fun `kazda gra z botami heurystycznymi sie konczy bez bledow`() {
+    fun `heuristic bots finish every game without errors`() {
         val random = Random(2)
         val bot = HeuristicBot(random)
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
@@ -32,7 +32,7 @@ class SimulationTest {
     }
 
     @Test
-    fun `symulacja dziala tez dla zmienionych regul`() {
+    fun `simulation works with changed rules`() {
         val random = Random(3)
         val bot = HeuristicBot(random)
         val config = GameConfig(killOnFirstNight = true, tieRule = TieRule.RANDOM_AMONG_TIED)
@@ -41,7 +41,7 @@ class SimulationTest {
     }
 
     @Test
-    fun `ten sam seed daje te same wyniki`() {
+    fun `same seed gives the same results`() {
         val a = simulate(8, 200, GameConfig(), Random(7), HeuristicBot(Random(7)))
         val b = simulate(8, 200, GameConfig(), Random(7), HeuristicBot(Random(7)))
         assertEquals(a, b)

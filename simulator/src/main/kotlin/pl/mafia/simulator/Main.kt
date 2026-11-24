@@ -7,10 +7,7 @@ import pl.mafia.engine.bots.HeuristicBot
 import pl.mafia.engine.bots.RandomBot
 import kotlin.random.Random
 
-/**
- * Użycie: ./gradlew :simulator:run --args="<liczba gier> <random|heuristic> <seed>"
- * Wszystkie argumenty są opcjonalne (domyślnie: 10000 heuristic 42).
- */
+// Args (all optional): <games per size> <random|heuristic> <seed>
 fun main(args: Array<String>) {
     val games = args.getOrNull(0)?.toInt() ?: 10_000
     val botKind = args.getOrNull(1) ?: "heuristic"
@@ -20,16 +17,15 @@ fun main(args: Array<String>) {
     val bot: Bot = when (botKind) {
         "random" -> RandomBot(random)
         "heuristic" -> HeuristicBot(random)
-        else -> error("Nieznany typ bota: $botKind (dostępne: random, heuristic)")
+        else -> error("Unknown bot type: $botKind (expected random or heuristic)")
     }
 
-    // Reguły do eksperymentów zmieniasz tutaj, np. GameConfig(killOnFirstNight = true)
     val config = GameConfig()
 
-    println("Gier na rozmiar: $games, boty: $botKind, seed: $seed")
-    println("Konfiguracja: $config")
+    println("Games per size: $games, bots: $botKind, seed: $seed")
+    println("Config: $config")
     println()
-    println("%-8s %-10s %-10s %-10s".format("Graczy", "Miasto %", "Mafia %", "Sr. dni"))
+    println("%-8s %-10s %-10s %-10s".format("Players", "Town %", "Mafia %", "Avg days"))
     for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
         val s = simulate(n, games, config, random, bot)
         println(

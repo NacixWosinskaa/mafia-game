@@ -7,16 +7,13 @@ import pl.mafia.engine.RoleId
 import pl.mafia.engine.Roles
 import kotlin.random.Random
 
-/** Bot widzi tylko [PlayerView], tak samo jak człowiek. */
 interface Bot {
-    /** Cel akcji nocnej albo null, jeśli bot nie ma akcji / rezygnuje. */
     fun chooseNightTarget(view: PlayerView): PlayerId?
 
-    /** Cel głosowania; null = głos "na nikogo". */
+    // null means a vote for nobody.
     fun chooseVote(view: PlayerView): PlayerId?
 }
 
-/** Wybiera losowo spośród dozwolonych celów. Dolna granica jakości do testów balansu. */
 class RandomBot(private val random: Random) : Bot {
     override fun chooseNightTarget(view: PlayerView): PlayerId? =
         view.legalNightTargets.randomOrNull(random)
@@ -25,12 +22,8 @@ class RandomBot(private val random: Random) : Bot {
         view.legalVoteTargets.randomOrNull(random)
 }
 
-/**
- * Prosta heurystyka, bez rozmów (symulator nie modeluje dyskusji):
- *  - mafia koordynuje cel nocny i nie głosuje na swoich,
- *  - detektyw bada jeszcze niesprawdzone osoby i głosuje na znaną mafię,
- *  - pozostali działają losowo.
- */
+// Mafia agrees on one kill target and never votes for teammates; the detective checks
+// new people and votes for known mafia. Everyone else is random. There is no discussion.
 class HeuristicBot(private val random: Random) : Bot {
 
     override fun chooseNightTarget(view: PlayerView): PlayerId? {
