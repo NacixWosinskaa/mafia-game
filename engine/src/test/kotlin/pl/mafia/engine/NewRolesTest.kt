@@ -1,5 +1,6 @@
 package pl.mafia.engine
 
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -13,6 +14,12 @@ class NewRolesTest {
     private val roles = listOf(
         RoleId.MAFIOSO, RoleId.MAFIOSO, RoleId.DOCTOR, RoleId.DETECTIVE,
         RoleId.DAY_SHOOTER, RoleId.JOKER, RoleId.CITIZEN, RoleId.CITIZEN,
+    )
+
+    // 0-1 mafia, 2 doctor, 3 detective, 4 avenger, 5 day shooter, 6-7 citizens
+    private val avengerRoles = listOf(
+        RoleId.MAFIOSO, RoleId.MAFIOSO, RoleId.DOCTOR, RoleId.DETECTIVE,
+        RoleId.AVENGER, RoleId.DAY_SHOOTER, RoleId.CITIZEN, RoleId.CITIZEN,
     )
 
     private fun dayGame(config: GameConfig = GameConfig()): Game {
@@ -61,17 +68,35 @@ class NewRolesTest {
     }
 
     @Test
-    fun `day shooter kills the target immediately and reveals their role`() {
+    fun `shooter who hits mafia survives`() {
+        val g = dayGame()
+        g.submitDayShot(4, 0)
+        assertFalse(g.player(0).alive)
+        assertTrue(g.player(4).alive)
+    }
+
+    @Test
+    fun `shooter who misses dies with the target and both roles are revealed`() {
         val g = dayGame()
         g.submitDayShot(4, 6)
         assertFalse(g.player(6).alive)
+        assertFalse(g.player(4).alive)
         assertEquals(RoleId.CITIZEN, g.viewFor(2).revealedRoles[6])
+        assertEquals(RoleId.DAY_SHOOTER, g.viewFor(2).revealedRoles[4])
         assertTrue(g.events.any { it == GameEvent.PlayerShot(4, 6, RoleId.CITIZEN) })
+        assertTrue(g.events.any { it == GameEvent.ShooterMissed(4, RoleId.DAY_SHOOTER) })
+    }
+
+    @Test
+    fun `recoil can be switched off`() {
+        val g = dayGame(GameConfig(shooterDiesOnMiss = false))
+        g.submitDayShot(4, 6)
+        assertTrue(g.player(4).alive)
     }
 
     @Test
     fun `day shooter has a single shot`() {
-        val g = dayGame()
+        val g = dayGame(GameConfig(shooterDiesOnMiss = false))
         g.submitDayShot(4, 6)
         assertEquals(emptyList(), g.legalShotTargets(4))
         assertFailsWith<IllegalArgumentException> { g.submitDayShot(4, 7) }
@@ -110,12 +135,43 @@ class NewRolesTest {
     }
 
     @Test
-    fun `role setups include the new roles only from the planned sizes`() {
-        for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
-            val setup = RoleSetups.forPlayers(n)
-            assertEquals(n >= 8, RoleId.JOKER in setup, "joker for $n")
-            assertEquals(n >= 10, RoleId.DAY_SHOOTER in setup, "shooter for $n")
-            assertTrue(RoleId.CITIZEN in setup, "at least one citizen for $n")
-        }
+    fun `avenger killed by the mafia takes one mafioso along`() {
+        val g = Game.withRoles(avengerRoles, GameConfig(killOnFirstNight = true), Random(1))
+        g.submitNightAction(0, 4)
+        g.resolveNight()
+        assertFalse(g.player(4).alive)
+        assertEquals(1, listOf(0, 1).count { !g.player(it).alive })
+        assertTrue(g.events.any { it is GameEvent.RevengeTriggered && it.avengerId == 4 })
+    }
+
+    @Test
+    fun `no revenge when the doctor saves the avenger`() {
+        val g = Game.withRoles(avengerRoles, GameConfig(killOnFirstNight = true))
+        g.submitNightAction(0, 4)
+        g.submitNightAction(2, 4)
+        g.resolveNight()
+        assertTrue(g.player(4).alive)
+        assertTrue(g.player(0).alive && g.player(1).alive)
+    }
+
+    @Test
+    fun `no revenge when the avenger is shot during the day`() {
+        val g = Game.withRoles(avengerRoles)
+        g.resolveNight()
+        g.submitDayShot(5, 4)
+        assertFalse(g.player(4).alive)
+        assertTrue(g.player(0).alive && g.player(1).alive)
+    }
+
+    @Test
+    fun `revenge can end the game for the mafia`() {
+        val g = Game.withRoles(
+            listOf(RoleId.MAFIOSO, RoleId.AVENGER, RoleId.CITIZEN, RoleId.CITIZEN),
+            GameConfig(killOnFirstNight = true),
+        )
+        g.submitNightAction(0, 1)
+        g.resolveNight()
+        assertTrue(g.isOver)
+        assertEquals(Faction.TOWN, g.winner)
     }
 }

@@ -96,7 +96,15 @@ class Game private constructor(
         }
 
         result.preventedAttackOn?.let { _events += GameEvent.AttackPrevented(it) }
-        result.deaths.forEach { kill(it) }
+        result.deaths.forEach { id ->
+            kill(id)
+            if (player(id).definition.revengeOnMafiaKill) {
+                alivePlayers().filter { it.faction == Faction.MAFIA }.randomOrNull(random)?.let { mafioso ->
+                    _events += GameEvent.RevengeTriggered(id, mafioso.id)
+                    kill(mafioso.id)
+                }
+            }
+        }
         result.investigations.forEach {
             knownInvestigations += it
             _events += GameEvent.Investigated(it.detectiveId, it.targetId, it.isMafia)
@@ -155,6 +163,12 @@ class Game private constructor(
         _players[targetId] = victim.copy(alive = false)
         votes.remove(targetId)
         _events += GameEvent.PlayerShot(actorId, targetId, victim.role)
+        if (config.shooterDiesOnMiss && victim.faction != Faction.MAFIA) {
+            val shooter = player(actorId)
+            _players[actorId] = shooter.copy(alive = false)
+            votes.remove(actorId)
+            _events += GameEvent.ShooterMissed(actorId, shooter.role)
+        }
         checkWinner()
     }
 
@@ -245,6 +259,7 @@ class Game private constructor(
                     is GameEvent.PlayerKilled -> put(it.playerId, it.role)
                     is GameEvent.PlayerExecuted -> put(it.playerId, it.role)
                     is GameEvent.PlayerShot -> put(it.targetId, it.role)
+                    is GameEvent.ShooterMissed -> put(it.shooterId, it.role)
                     else -> Unit
                 }
             }
@@ -273,7 +288,7 @@ class Game private constructor(
             config: GameConfig = GameConfig(),
             random: Random = Random.Default,
             names: List<String> = List(playerCount) { "Player ${it + 1}" },
-        ): Game = Game(names, RoleSetups.forPlayers(playerCount).shuffled(random), config, random)
+        ): Game = Game(names, RoleSetups.forPlayers(playerCount, random).shuffled(random), config, random)
 
         // Roles are assigned by list index (id = index). Mainly for tests.
         fun withRoles(

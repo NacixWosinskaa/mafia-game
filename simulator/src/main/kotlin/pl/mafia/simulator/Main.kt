@@ -1,5 +1,6 @@
 package pl.mafia.simulator
 
+import pl.mafia.engine.Game
 import pl.mafia.engine.GameConfig
 import pl.mafia.engine.RoleSetups
 import pl.mafia.engine.bots.Bot
@@ -8,11 +9,14 @@ import pl.mafia.engine.bots.InformedBot
 import pl.mafia.engine.bots.RandomBot
 import kotlin.random.Random
 
-// Args (all optional): <games per size> <random|heuristic|informed> <seed>
+// Args (all optional): [setups] <games per size> <random|heuristic|informed> <seed>
+// With "setups" the report is per role combination instead of per player count.
 fun main(args: Array<String>) {
-    val games = args.getOrNull(0)?.toInt() ?: 10_000
-    val botKind = args.getOrNull(1) ?: "informed"
-    val seed = args.getOrNull(2)?.toLong() ?: 42L
+    val perSetup = args.firstOrNull() == "setups"
+    val rest = if (perSetup) args.drop(1) else args.toList()
+    val games = rest.getOrNull(0)?.toInt() ?: 10_000
+    val botKind = rest.getOrNull(1) ?: "informed"
+    val seed = rest.getOrNull(2)?.toLong() ?: 42L
 
     val random = Random(seed)
     val bot: Bot = when (botKind) {
@@ -24,9 +28,13 @@ fun main(args: Array<String>) {
 
     val config = GameConfig()
 
-    println("Games per size: $games, bots: $botKind, seed: $seed")
+    println("Games: $games, bots: $botKind, seed: $seed")
     println("Config: $config")
     println()
+    if (perSetup) reportSetups(games, config, random, bot) else reportSizes(games, config, random, bot)
+}
+
+private fun reportSizes(games: Int, config: GameConfig, random: Random, bot: Bot) {
     println("%-8s %-10s %-10s %-10s %-10s".format("Players", "Town %", "Mafia %", "Neutral %", "Avg days"))
     for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
         val s = simulate(n, games, config, random, bot)
@@ -35,5 +43,18 @@ fun main(args: Array<String>) {
                 s.playerCount, s.townPercent, s.mafiaPercent, s.neutralPercent, s.averageDays,
             ),
         )
+    }
+}
+
+private fun reportSetups(games: Int, config: GameConfig, random: Random, bot: Bot) {
+    println("%-8s %-28s %-10s %-10s %-10s".format("Players", "Special roles", "Town %", "Mafia %", "Neutral %"))
+    for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
+        for (specials in RoleSetups.combinations(n)) {
+            val s = simulateGames(n, games, bot) {
+                Game.withRoles(RoleSetups.build(n, specials).shuffled(random), config, random)
+            }
+            val label = specials.joinToString("+").ifEmpty { "-" }
+            println("%-8d %-28s %-10.1f %-10.1f %-10.1f".format(n, label, s.townPercent, s.mafiaPercent, s.neutralPercent))
+        }
     }
 }

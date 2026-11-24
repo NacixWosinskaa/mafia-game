@@ -21,8 +21,7 @@ data class SizeStats(
     val neutralPercent: Double get() = 100.0 * neutralWins / games
 }
 
-fun playGame(playerCount: Int, config: GameConfig, random: Random, bot: Bot): GameOutcome {
-    val game = Game.create(playerCount, config, random)
+fun playGame(game: Game, bot: Bot): GameOutcome {
     var rounds = 0
     while (!game.isOver) {
         check(++rounds < 500) { "Game does not terminate, the rules have a bug" }
@@ -55,19 +54,13 @@ fun playGame(playerCount: Int, config: GameConfig, random: Random, bot: Bot): Ga
     return GameOutcome(game.winner!!, game.day)
 }
 
-fun simulate(
-    playerCount: Int,
-    games: Int,
-    config: GameConfig,
-    random: Random,
-    bot: Bot,
-): SizeStats {
+fun simulateGames(playerCount: Int, games: Int, bot: Bot, newGame: () -> Game): SizeStats {
     var town = 0
     var mafia = 0
     var neutral = 0
     var days = 0L
     repeat(games) {
-        val outcome = playGame(playerCount, config, random, bot)
+        val outcome = playGame(newGame(), bot)
         when (outcome.winner) {
             Faction.TOWN -> town++
             Faction.MAFIA -> mafia++
@@ -77,3 +70,11 @@ fun simulate(
     }
     return SizeStats(playerCount, games, town, mafia, neutral, days.toDouble() / games)
 }
+
+fun simulate(
+    playerCount: Int,
+    games: Int,
+    config: GameConfig,
+    random: Random,
+    bot: Bot,
+): SizeStats = simulateGames(playerCount, games, bot) { Game.create(playerCount, config, random) }

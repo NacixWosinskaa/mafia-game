@@ -20,6 +20,8 @@ sealed interface GameEvent {
 
     // A null value (votes) or key (tally) means "nobody".
     data class VotesTallied(val votes: Map<PlayerId, PlayerId?>, val tally: Map<PlayerId?, Int>) : GameEvent
+    data class RevengeTriggered(val avengerId: PlayerId, val targetId: PlayerId) : GameEvent
+    data class ShooterMissed(val shooterId: PlayerId, val role: RoleId) : GameEvent
     data class PlayerShot(val shooterId: PlayerId, val targetId: PlayerId, val role: RoleId) : GameEvent
     data class PlayerExecuted(val playerId: PlayerId, val role: RoleId) : GameEvent
     data class NoExecution(val reason: NoExecutionReason) : GameEvent
