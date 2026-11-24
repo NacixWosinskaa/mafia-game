@@ -34,11 +34,57 @@ class NewRolesTest {
 
     @Test
     fun `joker wins when executed by vote`() {
-        val g = dayGame()
+        val g = dayGame(GameConfig(executionWinFromDay = 1))
         g.everyoneVotes { id -> if (id == 5) 0 else 5 }
         g.resolveDay()
         assertTrue(g.isOver)
         assertEquals(Faction.NEUTRAL, g.winner)
+    }
+
+    @Test
+    fun `joker executed before day three just dies by default`() {
+        val g = dayGame()
+        g.everyoneVotes { id -> if (id == 5) 0 else 5 }
+        g.resolveDay()
+        assertFalse(g.player(5).alive)
+        assertFalse(g.isOver)
+        assertNull(g.winner)
+    }
+
+    @Test
+    fun `joker executed on day three wins by default`() {
+        val g = dayGame()
+        repeat(2) {
+            g.everyoneVotes { null }
+            g.resolveDay()
+            g.resolveNight()
+        }
+        g.everyoneVotes { id -> if (id == 5) 0 else 5 }
+        g.resolveDay()
+        assertTrue(g.isOver)
+        assertEquals(Faction.NEUTRAL, g.winner)
+    }
+
+    @Test
+    fun `joker needs a majority of the living when that rule is on`() {
+        val config = GameConfig(executionWinFromDay = 1, executionWinNeedsMajority = true)
+        val plurality = dayGame(config)
+        plurality.everyoneVotes { id ->
+            when (id) {
+                0, 1, 2 -> 5
+                3, 4 -> 6
+                6, 7 -> 3
+                else -> 0
+            }
+        }
+        plurality.resolveDay()
+        assertFalse(plurality.player(5).alive)
+        assertNull(plurality.winner)
+
+        val majority = dayGame(config)
+        majority.everyoneVotes { id -> if (id == 5) 0 else 5 }
+        majority.resolveDay()
+        assertEquals(Faction.NEUTRAL, majority.winner)
     }
 
     @Test

@@ -179,6 +179,8 @@ class Game private constructor(
         }
         val tally: Map<PlayerId?, Int> = validVotes.values.groupingBy { it }.eachCount()
         _events += GameEvent.VotesTallied(validVotes, tally)
+        val today = day
+        val aliveBefore = alivePlayers().size
 
         var executed: PlayerId? = null
         if (tally.isEmpty()) {
@@ -198,9 +200,13 @@ class Game private constructor(
         votes.clear()
         day++
 
-        val executedPlayer = executed?.let { player(it) }
-        if (executedPlayer != null && executedPlayer.definition.winsIfExecuted) {
-            finish(executedPlayer.faction)
+        val votesAgainst = validVotes.values.count { it == executed }
+        val executionWinner = executed?.let { player(it) }?.takeIf {
+            it.definition.winsIfExecuted && today >= config.executionWinFromDay &&
+                (!config.executionWinNeedsMajority || votesAgainst * 2 > aliveBefore)
+        }
+        if (executionWinner != null) {
+            finish(executionWinner.faction)
         } else if (!checkWinner()) {
             phase = Phase.NIGHT
             _events += GameEvent.NightBegan(day)

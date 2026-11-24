@@ -47,13 +47,13 @@ private fun reportSizes(games: Int, config: GameConfig, random: Random, bot: Bot
 }
 
 private fun reportSetups(games: Int, config: GameConfig, random: Random, bot: Bot) {
-    println("%-8s %-28s %-10s %-10s %-10s".format("Players", "Special roles", "Town %", "Mafia %", "Neutral %"))
+    println("%-8s %-28s %-10s %-10s %-10s".format("Players", "Mafia / special roles", "Town %", "Mafia %", "Neutral %"))
     for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
-        for (specials in RoleSetups.combinations(n)) {
+        for (setup in RoleSetups.combinations(n)) {
             val s = simulateGames(n, games, bot) {
-                Game.withRoles(RoleSetups.build(n, specials).shuffled(random), config, random)
+                Game.withRoles(RoleSetups.build(n, setup).shuffled(random), config, random)
             }
-            val label = specials.joinToString("+").ifEmpty { "-" }
+            val label = "${setup.mafia}M " + setup.specials.joinToString("+").ifEmpty { "-" }
             println("%-8d %-28s %-10.1f %-10.1f %-10.1f".format(n, label, s.townPercent, s.mafiaPercent, s.neutralPercent))
         }
     }

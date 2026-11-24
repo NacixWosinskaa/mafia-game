@@ -20,10 +20,21 @@ class RoleSetupsTest {
     }
 
     @Test
-    fun `every setup has exactly one detective and one doctor`() {
+    fun `every setup has exactly one detective and at most one doctor`() {
         for ((n, roles) in allSetups()) {
             assertEquals(1, roles.count { it == RoleId.DETECTIVE }, "detectives for $n")
-            assertEquals(1, roles.count { it == RoleId.DOCTOR }, "doctors for $n")
+            assertTrue(roles.count { it == RoleId.DOCTOR } <= 1, "doctors for $n")
+        }
+    }
+
+    @Test
+    fun `the doctor is optional below 8 players and guaranteed from 8`() {
+        for (n in 6..7) {
+            val hasDoctor = RoleSetups.combinations(n).map { RoleId.DOCTOR in RoleSetups.build(n, it) }
+            assertTrue(true in hasDoctor && false in hasDoctor, "doctor can be in or out for $n")
+        }
+        for (n in 8..RoleSetups.MAX_PLAYERS) {
+            assertTrue(RoleSetups.combinations(n).all { RoleId.DOCTOR in RoleSetups.build(n, it) }, "doctor for $n")
         }
     }
 
@@ -55,8 +66,16 @@ class RoleSetupsTest {
 
     @Test
     fun `larger games never get fewer special roles`() {
-        val counts = (RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS).map { RoleSetups.combinations(it).first().size }
+        val counts = (RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS).map { RoleSetups.combinations(it).first().specials.size }
         assertEquals(counts.sorted(), counts)
+    }
+
+    @Test
+    fun `mafia count is drawn only for 10 and 11 players`() {
+        for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
+            val counts = RoleSetups.combinations(n).map { it.mafia }.toSet()
+            assertEquals(if (n in 10..11) setOf(2, 3) else 1, if (n in 10..11) counts else counts.size, "mafia counts for $n")
+        }
     }
 
     @Test
