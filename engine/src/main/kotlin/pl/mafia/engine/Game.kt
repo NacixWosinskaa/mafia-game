@@ -58,6 +58,10 @@ class Game private constructor(
 
     val isOver: Boolean get() = phase == Phase.FINISHED
 
+    // Everyone who won, set when the game ends: the winning faction including its dead members, or the neutral winner.
+    var winners: Set<PlayerId> = emptySet()
+        private set
+
     init {
         require(names.size == roles.size) { "Names and roles must have the same size" }
         _events += GameEvent.GameStarted(roles.size)
@@ -222,7 +226,7 @@ class Game private constructor(
                 (!config.executionWinNeedsMajority || votesAgainst * 2 > aliveBefore)
         }
         if (executionWinner != null) {
-            finish(executionWinner.faction)
+            finish(executionWinner.faction, executionWinner.id)
         } else if (!checkWinner()) {
             phase = Phase.NIGHT
             _events += GameEvent.NightBegan(day)
@@ -259,8 +263,10 @@ class Game private constructor(
         return true
     }
 
-    private fun finish(result: Faction) {
+    private fun finish(result: Faction, neutralWinner: PlayerId? = null) {
         winner = result
+        winners = _players.filter { it.id == neutralWinner || (result != Faction.NEUTRAL && it.faction == result) }
+            .map { it.id }.toSet()
         phase = Phase.FINISHED
         _events += GameEvent.GameOver(result)
     }

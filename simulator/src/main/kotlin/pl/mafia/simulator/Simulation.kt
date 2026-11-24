@@ -3,10 +3,13 @@ package pl.mafia.simulator
 import pl.mafia.engine.Faction
 import pl.mafia.engine.Game
 import pl.mafia.engine.GameConfig
+import pl.mafia.engine.RoleId
+import pl.mafia.engine.RoleSetups
 import pl.mafia.engine.bots.Bot
 import kotlin.random.Random
 
-data class GameOutcome(val winner: Faction, val days: Int)
+// roles and winnerRoles are the roles dealt at the start, one entry per player.
+data class GameOutcome(val winner: Faction, val days: Int, val roles: List<RoleId>, val winnerRoles: List<RoleId>)
 
 data class SizeStats(
     val playerCount: Int,
@@ -23,6 +26,7 @@ data class SizeStats(
 
 fun playGame(game: Game, bot: Bot): GameOutcome {
     var rounds = 0
+    val dealt = game.players.map { it.role }
     while (!game.isOver) {
         check(++rounds < 500) { "Game does not terminate, the rules have a bug" }
 
@@ -51,7 +55,7 @@ fun playGame(game: Game, bot: Bot): GameOutcome {
         }
         game.resolveDay()
     }
-    return GameOutcome(game.winner!!, game.day)
+    return GameOutcome(game.winner!!, game.day, dealt, game.winners.sorted().map { dealt[it] })
 }
 
 fun simulateGames(playerCount: Int, games: Int, bot: Bot, newGame: () -> Game): SizeStats {
@@ -69,6 +73,24 @@ fun simulateGames(playerCount: Int, games: Int, bot: Bot, newGame: () -> Game): 
         days += outcome.days
     }
     return SizeStats(playerCount, games, town, mafia, neutral, days.toDouble() / games)
+}
+
+data class RoleStats(val role: RoleId, val games: Int, val wins: Int) {
+    val winPercent: Double get() = 100.0 * wins / games
+}
+
+// Win rate of each role over random setups of every supported size, one entry per dealt player.
+fun simulateRoles(gamesPerSize: Int, config: GameConfig, random: Random, bot: Bot): List<RoleStats> {
+    val played = mutableMapOf<RoleId, Int>()
+    val won = mutableMapOf<RoleId, Int>()
+    for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
+        repeat(gamesPerSize) {
+            val outcome = playGame(Game.create(n, config, random), bot)
+            outcome.roles.forEach { played.merge(it, 1, Int::plus) }
+            outcome.winnerRoles.forEach { won.merge(it, 1, Int::plus) }
+        }
+    }
+    return played.map { (role, games) -> RoleStats(role, games, won[role] ?: 0) }.sortedBy { it.role.ordinal }
 }
 
 fun simulate(

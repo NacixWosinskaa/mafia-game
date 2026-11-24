@@ -9,11 +9,11 @@ import pl.mafia.engine.bots.InformedBot
 import pl.mafia.engine.bots.RandomBot
 import kotlin.random.Random
 
-// Args (all optional): [setups] <games per size> <random|heuristic|informed> <seed>
-// With "setups" the report is per role combination instead of per player count.
+// Args (all optional): [setups|roles] <games per size> <random|heuristic|informed> <seed>
+// With "setups" the report is per role combination, with "roles" per role, instead of per player count.
 fun main(args: Array<String>) {
-    val perSetup = args.firstOrNull() == "setups"
-    val rest = if (perSetup) args.drop(1) else args.toList()
+    val mode = args.firstOrNull()?.takeIf { it == "setups" || it == "roles" }
+    val rest = if (mode != null) args.drop(1) else args.toList()
     val games = rest.getOrNull(0)?.toInt() ?: 10_000
     val botKind = rest.getOrNull(1) ?: "informed"
     val seed = rest.getOrNull(2)?.toLong() ?: 42L
@@ -31,7 +31,11 @@ fun main(args: Array<String>) {
     println("Games: $games, bots: $botKind, seed: $seed")
     println("Config: $config")
     println()
-    if (perSetup) reportSetups(games, config, random, bot) else reportSizes(games, config, random, bot)
+    when (mode) {
+        "setups" -> reportSetups(games, config, random, bot)
+        "roles" -> reportRoles(games, config, random, bot)
+        else -> reportSizes(games, config, random, bot)
+    }
 }
 
 private fun reportSizes(games: Int, config: GameConfig, random: Random, bot: Bot) {
@@ -43,6 +47,13 @@ private fun reportSizes(games: Int, config: GameConfig, random: Random, bot: Bot
                 s.playerCount, s.townPercent, s.mafiaPercent, s.neutralPercent, s.averageDays,
             ),
         )
+    }
+}
+
+private fun reportRoles(games: Int, config: GameConfig, random: Random, bot: Bot) {
+    println("%-14s %-10s %-10s".format("Role", "Players", "Win %"))
+    for (s in simulateRoles(games, config, random, bot)) {
+        println("%-14s %-10d %-10.1f".format(s.role, s.games, s.winPercent))
     }
 }
 

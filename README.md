@@ -91,7 +91,7 @@ To try a rule change, edit the `GameConfig()` line in `simulator/.../Main.kt` an
 | `heuristic` | Random, but mafia coordinate kills and the detective checks new people. No claims, never shoots. |
 | `informed` | Detective announces results, mafia bluff and hunt accusers, doctor protects accusers, the shooter fires on strong evidence only, the joker makes provocative accusations, everyone else votes for the most suspicious player (`bots/Suspicion.kt`). |
 
-Run `./gradlew :simulator:run` for win rates per player count, or `./gradlew :simulator:run --args="setups 10000 informed 42"` for one row per role combination.
+Run `./gradlew :simulator:run` for win rates per player count, `./gradlew :simulator:run --args="setups 1000 informed 42"` for one row per role combination, or `--args="roles 3000 informed 42"` for the win rate of each role.
 
 Win rates in % (4,000 games per size, random setups, default config, seed 42):
 
@@ -107,24 +107,41 @@ Win rates in % (4,000 games per size, random setups, default config, seed 42):
 | 13 | 12.4 / 77.5 / 10.1 | 84.6 / 4.8 / 10.7 |
 | 14 | 13.3 / 76.2 / 10.5 | 85.1 / 3.7 / 11.2 |
 
-Effect of each special role on the town win rate with `informed` bots (1,500 games per setup, difference from the mean of the same player count and mafia count; `setups` report):
+Win rate of each role over all sizes (`roles` report, 3,000 games per size, random setups; counted per dealt player):
 
-| Role | Town win rate vs. average |
-| --- | --- |
-| Godfather | -11.9 |
-| Joker | -7.1 |
-| Blackmailer | +5.8 |
-| Avenger | +5.5 |
-| Bodyguard | +1.4 |
-| Lookout | +1.3 |
-| Day shooter | +0.3 |
+| Role | heuristic % | informed % |
+| --- | --- | --- |
+| Citizen | 18.7 | 83.5 |
+| Detective | 19.2 | 82.9 |
+| Doctor | 18.0 | 83.4 |
+| Day shooter | 13.6 | 84.8 |
+| Avenger | 22.0 | 88.1 |
+| Bodyguard | 13.7 | 84.7 |
+| Lookout | 13.4 | 86.7 |
+| Mafioso | 77.9 | 12.1 |
+| Godfather | 79.6 | 14.3 |
+| Blackmailer | 75.3 | 7.3 |
+| Joker | 15.8 | 14.7 |
+
+Effect of each special role on the town win rate, in points against the average setup of the same player and mafia count (`setups` report, 1,000 games per setup):
+
+| Role | heuristic | informed |
+| --- | --- | --- |
+| Avenger | +10.0 | +5.9 |
+| Blackmailer | +4.1 | +5.8 |
+| Doctor (6-7 players) | +1.3 | +1.6 |
+| Bodyguard | -1.2 | +1.3 |
+| Lookout | -2.0 | +1.4 |
+| Day shooter | -1.1 | -0.2 |
+| Joker | -3.7 | -7.0 |
+| Godfather | -5.0 | -11.5 |
 
 Real balance sits between the two bot columns: `informed` is an upper bound for town, since its detective announces every result immediately and town bots never doubt each other. Taking the midpoint of the two columns, town wins 43-54% of games at 7-14 players; 6 players is town-favoured (about 68%) because a single mafioso is easy to hunt.
 
 Findings so far:
 
 - The joker used to win 28-34% of games whenever present. With the day-3 rule it wins 8-15%.
-- The godfather is the strongest role against `informed` bots, because they trust every "not mafia" result. Human players will doubt the detective more, so this is probably an overestimate.
+- The godfather is the strongest mafia role against `informed` bots, because they trust every "not mafia" result. Human players will doubt the detective more, so this is probably an overestimate.
 - The blackmailer helps town on paper: it replaces a killer with a role that only blocks. The two mafia specials roughly cancel out when both appear.
 - Bodyguard, lookout and day shooter are close to neutral. The lookout's effect depends on bots acting on its sightings, which humans do better.
 - 13-14 players with 4 mafia were mafia-leaning; 3 mafia is closer to even. The 10-11 player setups with 2 mafia are strongly town-favoured and with 3 mafia mafia-leaning, hence the per-game draw.
