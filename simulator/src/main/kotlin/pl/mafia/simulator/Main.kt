@@ -9,10 +9,13 @@ import pl.mafia.engine.bots.InformedBot
 import pl.mafia.engine.bots.RandomBot
 import kotlin.random.Random
 
+// "play [players] [seed] [name]" starts a console game with one human seat (see ConsoleGame.kt).
 // Args (all optional): [setups|roles|range|effects] <games per size> <random|heuristic|informed> <seed>
 // With "setups" the report is per role combination, with "roles" per role, instead of per player count.
 // "range" and "effects" ignore the bot type and play every town temperament (see Temperaments.kt).
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "play") return playConsole(args.drop(1))
+
     val mode = args.firstOrNull()?.takeIf { it in setOf("setups", "roles", "range", "effects") }
     val rest = if (mode != null) args.drop(1) else args.toList()
     val games = rest.getOrNull(0)?.toInt() ?: 10_000

@@ -61,6 +61,16 @@ A setup is built by `RoleSetups` for 6-14 players: mafia count from a table, alw
 - Slots for special roles by player count: 0-1 (6-7, where the doctor is one of them), 1 (8-9), 2 (10-11), 3 (12-14). From 12 players there are around 40 allowed setups per size.
 - `RoleSetups.combinations(n)` lists every allowed `Setup` (mafia count + specials). To drop one after looking at the simulator, add it to `rejected`.
 
+## Playing a game yourself
+
+One human seat against bots, in the console, in Polish (texts live in `simulator/src/main/resources/play-pl.properties`):
+
+```
+./gradlew :simulator:run --console=plain --args="play 10 42 Natalia"   # <players> <seed> <your name>, all optional
+```
+
+You get your role and ability, then each night a numbered list of targets (0 skips). During the day you can say what you know about a player (you may lie), shoot if you are the day shooter, show the table, or go to the vote. Everything shown comes from `PlayerView` and public events, the same information a bot gets. Bots play with a middling temperament (`trust 0.6, noise 1.0, candor 0.6, cunning 0.5`). The same seed gives the same roles and bot names.
+
 ## Rules and where to change them
 
 | Rule | Default | Where |

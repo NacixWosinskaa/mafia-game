@@ -12,6 +12,10 @@ application {
     mainClass.set("pl.mafia.simulator.MainKt")
 }
 
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
+}
+
 tasks.test {
     useJUnitPlatform()
 }
