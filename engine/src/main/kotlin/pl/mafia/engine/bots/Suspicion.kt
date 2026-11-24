@@ -14,6 +14,7 @@ internal data class Assessment(
 private const val CERTAIN = 100.0
 private const val CLAIM_WEIGHT = 3.0
 private const val VOTE_WEIGHT = 1.0
+private const val SIGHTING_WEIGHT = 4.0
 
 // Town-side reasoning. Town players never lie, so a claim that contradicts what the viewer
 // knows (own faction, own investigations, revealed roles) proves the speaker is mafia,
@@ -64,6 +65,12 @@ internal fun assess(view: PlayerView): Assessment {
         val wasMafia = revealedMafia(executed) ?: continue
         for ((voter, target) in day.votes) {
             if (target == executed) add(voter, if (wasMafia) -VOTE_WEIGHT else VOTE_WEIGHT)
+        }
+    }
+
+    for (sighting in view.sightings) {
+        if (sighting.targetId in view.nightDeaths[sighting.night].orEmpty()) {
+            sighting.visitorIds.forEach { add(it, SIGHTING_WEIGHT) }
         }
     }
 

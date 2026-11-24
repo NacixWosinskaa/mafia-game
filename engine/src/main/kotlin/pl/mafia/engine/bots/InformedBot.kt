@@ -23,10 +23,13 @@ class InformedBot(
         val options = view.legalNightTargets
         if (options.isEmpty()) return null
         return when (view.role) {
-            RoleId.MAFIOSO ->
+            RoleId.MAFIOSO, RoleId.GODFATHER ->
                 view.teammateKillChoice?.takeIf { it in options }
                     ?: accusersOfMafia(view).filter { it in options }.randomOrNull(random)
                     ?: options.random(random)
+
+            RoleId.BLACKMAILER ->
+                accusersOfMafia(view).filter { it in options }.randomOrNull(random) ?: options.random(random)
 
             RoleId.DETECTIVE -> {
                 val checked = view.investigations.map { it.targetId }.toSet()
@@ -34,7 +37,7 @@ class InformedBot(
                 pickHighest(assess(view).suspicion, pool)
             }
 
-            RoleId.DOCTOR -> {
+            RoleId.DOCTOR, RoleId.BODYGUARD, RoleId.LOOKOUT -> {
                 val credibility = assess(view).credibility
                 val accusers = view.claims.filter { it.claimsMafia && it.speakerId in options }.map { it.speakerId }
                 val best = accusers.maxOfOrNull { credibility[it] ?: 0.0 }
@@ -60,7 +63,8 @@ class InformedBot(
 
     override fun chooseClaims(view: PlayerView): List<ClaimIntent> = when (view.role) {
         RoleId.DETECTIVE -> announceResults(view)
-        RoleId.MAFIOSO -> bluff(view)
+        RoleId.MAFIOSO, RoleId.GODFATHER, RoleId.BLACKMAILER -> bluff(view)
+        RoleId.LOOKOUT -> accuseVisitors(view)
         RoleId.JOKER -> provoke(view)
         else -> emptyList()
     }
@@ -88,6 +92,17 @@ class InformedBot(
         return view.investigations
             .filter { it.targetId !in already }
             .map { ClaimIntent(it.targetId, it.isMafia) }
+    }
+
+    // Whoever visited a player who was killed that night is probably the killer.
+    private fun accuseVisitors(view: PlayerView): List<ClaimIntent> {
+        val already = claimedBy(view, view.selfId)
+        return view.sightings
+            .filter { it.targetId in view.nightDeaths[it.night].orEmpty() }
+            .flatMap { it.visitorIds }
+            .distinct()
+            .filter { it !in already && it in view.alive }
+            .map { ClaimIntent(it, true) }
     }
 
     private fun bluff(view: PlayerView): List<ClaimIntent> {

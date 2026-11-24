@@ -14,6 +14,10 @@ sealed interface GameEvent {
         val isMafia: Boolean,
     ) : GameEvent
 
+    data class ActionBlocked(val blockerId: PlayerId, val targetId: PlayerId) : GameEvent
+    data class BodyguardSacrificed(val bodyguardId: PlayerId, val targetId: PlayerId) : GameEvent
+    data class Watched(val lookoutId: PlayerId, val targetId: PlayerId, val visitorIds: List<PlayerId>) : GameEvent
+
     data class DayBegan(val day: Int) : GameEvent
 
     data class ClaimMade(val speakerId: PlayerId, val targetId: PlayerId, val claimsMafia: Boolean) : GameEvent

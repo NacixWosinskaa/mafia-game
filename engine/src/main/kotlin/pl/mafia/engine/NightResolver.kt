@@ -6,20 +6,36 @@ data class Investigation(
     val isMafia: Boolean,
 )
 
+// Who acted on the target during the night. Blocked players still count as visitors.
+data class Sighting(
+    val lookoutId: PlayerId,
+    val night: Int,
+    val targetId: PlayerId,
+    val visitorIds: List<PlayerId>,
+)
+
+data class Sacrifice(val bodyguardId: PlayerId, val targetId: PlayerId)
+
 data class NightResult(
     val attackedId: PlayerId?,
     val deaths: List<PlayerId>,
     val preventedAttackOn: PlayerId?,
+    val sacrifice: Sacrifice?,
+    // blocker -> blocked player
+    val blocks: Map<PlayerId, PlayerId>,
     val investigations: List<Investigation>,
+    val sightings: List<Sighting>,
 )
 
-// Resolution order: protect, kill, investigate. Actions are validated by Game beforehand.
+// Resolution order: block, protect, kill (a guard takes the hit), investigate and watch.
+// Actions are validated by Game beforehand.
 object NightResolver {
 
     fun resolve(
         players: List<Player>,
         actions: Map<PlayerId, PlayerId>,
         killAllowed: Boolean,
+        night: Int = 1,
     ): NightResult {
         val byId = players.associateBy { it.id }
 
@@ -29,24 +45,45 @@ object NightResolver {
                 actor != null && actor.alive && actor.definition.nightAction == type
             }.toList()
 
-        val protectedIds = actionsOf(NightActionType.PROTECT).map { it.second }.toSet()
+        val blocks = actionsOf(NightActionType.BLOCK).toMap()
+        val blockedIds = blocks.values.toSet()
+        fun effective(type: NightActionType) = actionsOf(type).filter { it.first !in blockedIds }
+
+        val protectedIds = effective(NightActionType.PROTECT).map { it.second }.toSet()
+        val guards = effective(NightActionType.GUARD)
 
         val attacked = if (killAllowed) {
-            pluralityTarget(actionsOf(NightActionType.KILL).map { it.second })
+            pluralityTarget(effective(NightActionType.KILL).map { it.second })
         } else {
             null
         }
         val prevented = attacked?.takeIf { it in protectedIds }
-        val deaths = if (attacked != null && prevented == null) listOf(attacked) else emptyList()
+        val guard = if (attacked != null && prevented == null) guards.firstOrNull { it.second == attacked } else null
+        val sacrifice = guard?.let { Sacrifice(it.first, attacked!!) }
+        val deaths = when {
+            sacrifice != null -> listOf(sacrifice.bodyguardId)
+            attacked != null && prevented == null -> listOf(attacked)
+            else -> emptyList()
+        }
 
-        // Results depend only on the target's faction, so they survive the detective's or target's death.
-        val investigations = actionsOf(NightActionType.INVESTIGATE)
+        // Results depend only on roles and actions, so they survive the actor's or target's death.
+        val investigations = effective(NightActionType.INVESTIGATE)
             .map { (detectiveId, targetId) ->
-                Investigation(detectiveId, targetId, byId.getValue(targetId).faction == Faction.MAFIA)
+                val target = byId.getValue(targetId)
+                Investigation(detectiveId, targetId, target.faction == Faction.MAFIA && !target.definition.appearsInnocent)
             }
             .sortedBy { it.detectiveId }
 
-        return NightResult(attacked, deaths, prevented, investigations)
+        val sightings = effective(NightActionType.WATCH)
+            .map { (lookoutId, targetId) ->
+                val visitors = actions.filter { (actorId, target) ->
+                    target == targetId && actorId != lookoutId && byId[actorId]?.alive == true
+                }.keys.sorted()
+                Sighting(lookoutId, night, targetId, visitors)
+            }
+            .sortedBy { it.lookoutId }
+
+        return NightResult(attacked, deaths, prevented, sacrifice, blocks, investigations, sightings)
     }
 
     // Ties go to the lowest player id to keep resolution deterministic.

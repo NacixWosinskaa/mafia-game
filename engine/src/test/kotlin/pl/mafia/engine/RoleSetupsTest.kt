@@ -49,7 +49,7 @@ class RoleSetupsTest {
     @Test
     fun `mafia is a minority and citizens exist`() {
         for ((n, roles) in allSetups()) {
-            assertTrue(roles.count { it == RoleId.MAFIOSO } * 2 < n, "mafia minority for $n")
+            assertTrue(roles.count { Roles.of(it).faction == Faction.MAFIA } * 2 < n, "mafia minority for $n")
             assertTrue(RoleId.CITIZEN in roles, "citizen for $n")
         }
     }
@@ -75,6 +75,28 @@ class RoleSetupsTest {
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
             val counts = RoleSetups.combinations(n).map { it.mafia }.toSet()
             assertEquals(if (n in 10..11) setOf(2, 3) else 1, if (n in 10..11) counts else counts.size, "mafia counts for $n")
+        }
+    }
+
+    @Test
+    fun `mafia specials need 8 players and leave a plain mafioso`() {
+        for ((n, roles) in allSetups()) {
+            val special = roles.count { it == RoleId.GODFATHER || it == RoleId.BLACKMAILER }
+            if (n < 8) assertEquals(0, special, "mafia specials for $n")
+            assertTrue(RoleId.MAFIOSO in roles, "plain mafioso for $n")
+            assertTrue(special <= if (n >= 12) 2 else 1, "mafia specials for $n")
+        }
+        assertTrue(allSetups().any { (_, roles) -> RoleId.GODFATHER in roles })
+        assertTrue(allSetups().any { (_, roles) -> RoleId.BLACKMAILER in roles })
+    }
+
+    @Test
+    fun `mafia headcount matches the table whatever the specials`() {
+        for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
+            for (setup in RoleSetups.combinations(n)) {
+                val roles = RoleSetups.build(n, setup)
+                assertEquals(setup.mafia, roles.count { Roles.of(it).faction == Faction.MAFIA }, "mafia for $n")
+            }
         }
     }
 

@@ -4,9 +4,12 @@ typealias PlayerId = Int
 
 enum class Faction { TOWN, MAFIA, NEUTRAL }
 
-enum class RoleId { CITIZEN, MAFIOSO, DETECTIVE, DOCTOR, JOKER, DAY_SHOOTER, AVENGER }
+enum class RoleId {
+    CITIZEN, MAFIOSO, DETECTIVE, DOCTOR, JOKER, DAY_SHOOTER, AVENGER,
+    GODFATHER, BODYGUARD, BLACKMAILER, LOOKOUT,
+}
 
-enum class NightActionType { KILL, PROTECT, INVESTIGATE }
+enum class NightActionType { KILL, PROTECT, INVESTIGATE, GUARD, BLOCK, WATCH }
 
 enum class DayActionType { SHOOT }
 
@@ -22,6 +25,8 @@ data class RoleDefinition(
     val revengeOnMafiaKill: Boolean = false,
     // Roles that profit from drawing attention; setups limit how many appear in small games.
     val bait: Boolean = false,
+    // Detective investigations report this role as not mafia.
+    val appearsInnocent: Boolean = false,
 )
 
 object Roles {
@@ -33,6 +38,10 @@ object Roles {
         RoleDefinition(RoleId.JOKER, Faction.NEUTRAL, winsIfExecuted = true, bait = true),
         RoleDefinition(RoleId.DAY_SHOOTER, Faction.TOWN, dayAction = DayActionType.SHOOT, dayActionUses = 1),
         RoleDefinition(RoleId.AVENGER, Faction.TOWN, revengeOnMafiaKill = true, bait = true),
+        RoleDefinition(RoleId.GODFATHER, Faction.MAFIA, NightActionType.KILL, appearsInnocent = true),
+        RoleDefinition(RoleId.BODYGUARD, Faction.TOWN, NightActionType.GUARD),
+        RoleDefinition(RoleId.BLACKMAILER, Faction.MAFIA, NightActionType.BLOCK),
+        RoleDefinition(RoleId.LOOKOUT, Faction.TOWN, NightActionType.WATCH),
     ).associateBy { it.id }
 
     fun of(id: RoleId): RoleDefinition = definitions.getValue(id)
