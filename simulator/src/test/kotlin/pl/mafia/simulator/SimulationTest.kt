@@ -18,7 +18,7 @@ class SimulationTest {
         val bot = RandomBot(random)
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
             val stats = simulate(n, 300, GameConfig(), random, bot)
-            assertEquals(300, stats.townWins + stats.mafiaWins)
+            assertEquals(300, stats.townWins + stats.mafiaWins + stats.neutralWins)
         }
     }
 
@@ -28,7 +28,7 @@ class SimulationTest {
         val bot = HeuristicBot(random)
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
             val stats = simulate(n, 300, GameConfig(), random, bot)
-            assertEquals(300, stats.townWins + stats.mafiaWins)
+            assertEquals(300, stats.townWins + stats.mafiaWins + stats.neutralWins)
         }
     }
 
@@ -38,7 +38,7 @@ class SimulationTest {
         val bot = InformedBot(random)
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
             val stats = simulate(n, 300, GameConfig(), random, bot)
-            assertEquals(300, stats.townWins + stats.mafiaWins)
+            assertEquals(300, stats.townWins + stats.mafiaWins + stats.neutralWins)
         }
     }
 
@@ -48,7 +48,7 @@ class SimulationTest {
         val bot = HeuristicBot(random)
         val config = GameConfig(killOnFirstNight = true, tieRule = TieRule.RANDOM_AMONG_TIED)
         val stats = simulate(8, 300, config, random, bot)
-        assertEquals(300, stats.townWins + stats.mafiaWins)
+        assertEquals(300, stats.townWins + stats.mafiaWins + stats.neutralWins)
     }
 
     @Test

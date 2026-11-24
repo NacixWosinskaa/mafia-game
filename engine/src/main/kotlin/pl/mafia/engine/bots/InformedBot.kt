@@ -7,6 +7,8 @@ import pl.mafia.engine.RoleId
 import pl.mafia.engine.Roles
 import kotlin.random.Random
 
+private const val SHOOT_THRESHOLD = 6.0
+
 // Uses public claims and vote history instead of guessing:
 //  - the detective announces every result,
 //  - mafia bluff (frame a random player, or counter an accuser) and hunt claimed detectives,
@@ -59,7 +61,26 @@ class InformedBot(
     override fun chooseClaims(view: PlayerView): List<ClaimIntent> = when (view.role) {
         RoleId.DETECTIVE -> announceResults(view)
         RoleId.MAFIOSO -> bluff(view)
+        RoleId.JOKER -> provoke(view)
         else -> emptyList()
+    }
+
+    // Shoots only on strong evidence: a proven liar, a known mafioso or several credible accusers.
+    override fun chooseShot(view: PlayerView): PlayerId? {
+        val options = view.legalShotTargets
+        if (options.isEmpty()) return null
+        val scores = assess(view).suspicion
+        val best = options.maxOf { scores[it] ?: 0.0 }
+        return if (best >= SHOOT_THRESHOLD) pickHighest(scores, options) else null
+    }
+
+    // The joker wants to be executed, so they make accusations that tend to get exposed.
+    private fun provoke(view: PlayerView): List<ClaimIntent> {
+        if (random.nextDouble() >= bluffChance) return emptyList()
+        val already = claimedBy(view, view.selfId)
+        val target = view.alive.filter { it != view.selfId && it !in already }.randomOrNull(random)
+            ?: return emptyList()
+        return listOf(ClaimIntent(target, true))
     }
 
     private fun announceResults(view: PlayerView): List<ClaimIntent> {

@@ -13,10 +13,12 @@ data class SizeStats(
     val games: Int,
     val townWins: Int,
     val mafiaWins: Int,
+    val neutralWins: Int,
     val averageDays: Double,
 ) {
     val townPercent: Double get() = 100.0 * townWins / games
     val mafiaPercent: Double get() = 100.0 * mafiaWins / games
+    val neutralPercent: Double get() = 100.0 * neutralWins / games
 }
 
 fun playGame(playerCount: Int, config: GameConfig, random: Random, bot: Bot): GameOutcome {
@@ -39,6 +41,13 @@ fun playGame(playerCount: Int, config: GameConfig, random: Random, bot: Bot): Ga
             }
         }
         for (player in game.alivePlayers()) {
+            if (game.isOver || !game.player(player.id).alive) continue
+            val target = bot.chooseShot(game.viewFor(player.id)) ?: continue
+            game.submitDayShot(player.id, target)
+        }
+        if (game.isOver) break
+
+        for (player in game.alivePlayers()) {
             game.submitVote(player.id, bot.chooseVote(game.viewFor(player.id)))
         }
         game.resolveDay()
@@ -55,15 +64,16 @@ fun simulate(
 ): SizeStats {
     var town = 0
     var mafia = 0
+    var neutral = 0
     var days = 0L
     repeat(games) {
         val outcome = playGame(playerCount, config, random, bot)
         when (outcome.winner) {
             Faction.TOWN -> town++
             Faction.MAFIA -> mafia++
-            Faction.NEUTRAL -> Unit
+            Faction.NEUTRAL -> neutral++
         }
         days += outcome.days
     }
-    return SizeStats(playerCount, games, town, mafia, days.toDouble() / games)
+    return SizeStats(playerCount, games, town, mafia, neutral, days.toDouble() / games)
 }

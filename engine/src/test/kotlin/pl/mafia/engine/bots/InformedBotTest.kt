@@ -6,6 +6,7 @@ import pl.mafia.engine.RoleId
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InformedBotTest {
@@ -94,6 +95,58 @@ class InformedBotTest {
         g.alivePlayers().forEach { g.submitVote(it.id, null) }
         g.resolveDay()
         assertEquals(2, bot.chooseNightTarget(g.viewFor(1)))
+    }
+
+    // 0-1 mafia, 2 doctor, 3 detective, 4 day shooter, 5 joker, 6-7 citizens
+    private val extendedRoles = listOf(
+        RoleId.MAFIOSO, RoleId.MAFIOSO, RoleId.DOCTOR, RoleId.DETECTIVE,
+        RoleId.DAY_SHOOTER, RoleId.JOKER, RoleId.CITIZEN, RoleId.CITIZEN,
+    )
+
+    private fun extendedDayGame(): Game {
+        val g = Game.withRoles(extendedRoles)
+        g.resolveNight()
+        return g
+    }
+
+    @Test
+    fun `shooter shoots a proven liar`() {
+        val g = extendedDayGame()
+        g.submitClaim(0, 4, true)
+        assertEquals(0, bot.chooseShot(g.viewFor(4)))
+    }
+
+    @Test
+    fun `shooter holds fire on weak evidence`() {
+        val g = extendedDayGame()
+        g.submitClaim(3, 0, true)
+        assertNull(bot.chooseShot(g.viewFor(4)))
+    }
+
+    @Test
+    fun `non-shooters never shoot`() {
+        val g = extendedDayGame()
+        assertNull(bot.chooseShot(g.viewFor(6)))
+    }
+
+    @Test
+    fun `joker accuses someone else`() {
+        val g = extendedDayGame()
+        val claim = bot.chooseClaims(g.viewFor(5)).single()
+        assertTrue(claim.claimsMafia)
+        assertTrue(claim.targetId != 5)
+    }
+
+    @Test
+    fun `a revealed joker's claims are not trusted as town claims`() {
+        val g = extendedDayGame()
+        g.submitClaim(5, 6, true)
+        g.alivePlayers().forEach { g.submitVote(it.id, null) }
+        g.resolveDay()
+        g.submitNightAction(0, 5)
+        g.resolveNight()
+        assertEquals(RoleId.JOKER, g.viewFor(4).revealedRoles[5])
+        assertNull(bot.chooseShot(g.viewFor(4)))
     }
 
     @Test

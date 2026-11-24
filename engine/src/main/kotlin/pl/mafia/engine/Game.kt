@@ -13,6 +13,7 @@ data class PlayerView(
     val teammateKillChoice: PlayerId?,
     val legalNightTargets: List<PlayerId>,
     val legalVoteTargets: List<PlayerId>,
+    val legalShotTargets: List<PlayerId>,
     val investigations: List<Investigation>,
     val revealedRoles: Map<PlayerId, RoleId>,
     val claims: List<Claim>,
@@ -33,6 +34,7 @@ class Game private constructor(
     private val nightActions = linkedMapOf<PlayerId, PlayerId>()
     private val votes = linkedMapOf<PlayerId, PlayerId?>()
     private val lastProtected = mutableMapOf<PlayerId, PlayerId>()
+    private val shotsUsed = mutableMapOf<PlayerId, Int>()
     private val knownInvestigations = mutableListOf<Investigation>()
     private val _claims = mutableListOf<Claim>()
     private val _voteHistory = mutableListOf<DayVotes>()
@@ -135,10 +137,34 @@ class Game private constructor(
         _events += GameEvent.ClaimMade(speakerId, targetId, claimsMafia)
     }
 
+    fun legalShotTargets(actorId: PlayerId): List<PlayerId> {
+        val actor = player(actorId)
+        if (phase != Phase.DAY || !actor.alive) return emptyList()
+        val definition = actor.definition
+        if (definition.dayAction != DayActionType.SHOOT) return emptyList()
+        if ((shotsUsed[actorId] ?: 0) >= definition.dayActionUses) return emptyList()
+        return alivePlayers().map { it.id }.filter { it != actorId }
+    }
+
+    // The target dies immediately and cannot be protected. A shot can end the game.
+    fun submitDayShot(actorId: PlayerId, targetId: PlayerId) {
+        check(phase == Phase.DAY) { "Shots can only be fired during the day" }
+        require(targetId in legalShotTargets(actorId)) { "Illegal shot from $actorId at $targetId" }
+        shotsUsed.merge(actorId, 1, Int::plus)
+        val victim = player(targetId)
+        _players[targetId] = victim.copy(alive = false)
+        votes.remove(targetId)
+        _events += GameEvent.PlayerShot(actorId, targetId, victim.role)
+        checkWinner()
+    }
+
     fun resolveDay() {
         check(phase == Phase.DAY) { "It is not day" }
-        val tally: Map<PlayerId?, Int> = votes.values.groupingBy { it }.eachCount()
-        _events += GameEvent.VotesTallied(votes.toMap(), tally)
+        val validVotes = votes.filter { (voter, target) ->
+            player(voter).alive && (target == null || player(target).alive)
+        }
+        val tally: Map<PlayerId?, Int> = validVotes.values.groupingBy { it }.eachCount()
+        _events += GameEvent.VotesTallied(validVotes, tally)
 
         var executed: PlayerId? = null
         if (tally.isEmpty()) {
@@ -154,11 +180,14 @@ class Game private constructor(
                 _events += GameEvent.NoExecution(NoExecutionReason.TIE)
             }
         }
-        _voteHistory += DayVotes(day, votes.toMap(), executed)
+        _voteHistory += DayVotes(day, validVotes, executed)
         votes.clear()
         day++
 
-        if (!checkWinner()) {
+        val executedPlayer = executed?.let { player(it) }
+        if (executedPlayer != null && executedPlayer.definition.winsIfExecuted) {
+            finish(executedPlayer.faction)
+        } else if (!checkWinner()) {
             phase = Phase.NIGHT
             _events += GameEvent.NightBegan(day)
         }
@@ -190,10 +219,14 @@ class Game private constructor(
             mafia >= others -> Faction.MAFIA
             else -> return false
         }
+        finish(result)
+        return true
+    }
+
+    private fun finish(result: Faction) {
         winner = result
         phase = Phase.FINISHED
         _events += GameEvent.GameOver(result)
-        return true
     }
 
     fun viewFor(playerId: PlayerId): PlayerView {
@@ -211,6 +244,7 @@ class Game private constructor(
                 when (it) {
                     is GameEvent.PlayerKilled -> put(it.playerId, it.role)
                     is GameEvent.PlayerExecuted -> put(it.playerId, it.role)
+                    is GameEvent.PlayerShot -> put(it.targetId, it.role)
                     else -> Unit
                 }
             }
@@ -225,6 +259,7 @@ class Game private constructor(
             teammateKillChoice = teammateChoice,
             legalNightTargets = legalNightTargets(playerId),
             legalVoteTargets = legalVoteTargets(playerId),
+            legalShotTargets = legalShotTargets(playerId),
             investigations = knownInvestigations.filter { it.detectiveId == playerId },
             revealedRoles = revealed,
             claims = _claims.toList(),

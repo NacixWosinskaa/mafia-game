@@ -27,12 +27,12 @@ fun main(args: Array<String>) {
     println("Games per size: $games, bots: $botKind, seed: $seed")
     println("Config: $config")
     println()
-    println("%-8s %-10s %-10s %-10s".format("Players", "Town %", "Mafia %", "Avg days"))
+    println("%-8s %-10s %-10s %-10s %-10s".format("Players", "Town %", "Mafia %", "Neutral %", "Avg days"))
     for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
         val s = simulate(n, games, config, random, bot)
         println(
-            "%-8d %-10.1f %-10.1f %-10.2f".format(
-                s.playerCount, s.townPercent, s.mafiaPercent, s.averageDays,
+            "%-8d %-10.1f %-10.1f %-10.1f %-10.2f".format(
+                s.playerCount, s.townPercent, s.mafiaPercent, s.neutralPercent, s.averageDays,
             ),
         )
     }

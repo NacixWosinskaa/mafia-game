@@ -17,12 +17,21 @@ object RoleSetups {
 
     private val townSpecials = listOf(RoleId.DETECTIVE, RoleId.DOCTOR)
 
+    private val extraRoles: Map<Int, List<RoleId>> = mapOf(
+        8 to listOf(RoleId.JOKER),
+        9 to listOf(RoleId.JOKER),
+        10 to listOf(RoleId.JOKER, RoleId.DAY_SHOOTER),
+        11 to listOf(RoleId.JOKER, RoleId.DAY_SHOOTER),
+        12 to listOf(RoleId.JOKER, RoleId.DAY_SHOOTER),
+    )
+
     fun forPlayers(playerCount: Int): List<RoleId> {
         require(playerCount in MIN_PLAYERS..MAX_PLAYERS) {
             "Player count must be in $MIN_PLAYERS..$MAX_PLAYERS, got $playerCount"
         }
         val mafia = mafiaCount.getValue(playerCount)
-        val citizens = playerCount - mafia - townSpecials.size
-        return List(mafia) { RoleId.MAFIOSO } + townSpecials + List(citizens) { RoleId.CITIZEN }
+        val extras = extraRoles[playerCount].orEmpty()
+        val citizens = playerCount - mafia - townSpecials.size - extras.size
+        return List(mafia) { RoleId.MAFIOSO } + townSpecials + extras + List(citizens) { RoleId.CITIZEN }
     }
 }

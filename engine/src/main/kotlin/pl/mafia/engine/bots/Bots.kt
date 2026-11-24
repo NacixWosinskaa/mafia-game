@@ -16,6 +16,9 @@ interface Bot {
     fun chooseVote(view: PlayerView): PlayerId?
 
     fun chooseClaims(view: PlayerView): List<ClaimIntent> = emptyList()
+
+    // null means holding fire.
+    fun chooseShot(view: PlayerView): PlayerId? = null
 }
 
 class RandomBot(private val random: Random) : Bot {

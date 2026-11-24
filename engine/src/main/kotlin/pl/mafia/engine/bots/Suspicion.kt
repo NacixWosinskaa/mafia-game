@@ -46,7 +46,7 @@ internal fun assess(view: PlayerView): Assessment {
     }
     liars.forEach { add(it, CERTAIN) }
 
-    fun revealedTown(id: PlayerId) = revealedMafia(id) == false
+    fun revealedTown(id: PlayerId) = view.revealedRoles[id]?.let { Roles.of(it).faction == Faction.TOWN } == true
 
     val credibility = view.claims.map { it.speakerId }.distinct().associateWith { speaker ->
         if (speaker in liars || revealedMafia(speaker) == true) 0.0 else 1.0 + (correct[speaker] ?: 0)
