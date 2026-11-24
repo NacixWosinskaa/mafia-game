@@ -16,8 +16,10 @@ sealed interface GameEvent {
 
     data class DayBegan(val day: Int) : GameEvent
 
-    // A null key counts votes for "nobody".
-    data class VotesTallied(val tally: Map<PlayerId?, Int>) : GameEvent
+    data class ClaimMade(val speakerId: PlayerId, val targetId: PlayerId, val claimsMafia: Boolean) : GameEvent
+
+    // A null value (votes) or key (tally) means "nobody".
+    data class VotesTallied(val votes: Map<PlayerId, PlayerId?>, val tally: Map<PlayerId?, Int>) : GameEvent
     data class PlayerExecuted(val playerId: PlayerId, val role: RoleId) : GameEvent
     data class NoExecution(val reason: NoExecutionReason) : GameEvent
     data class GameOver(val winner: Faction) : GameEvent

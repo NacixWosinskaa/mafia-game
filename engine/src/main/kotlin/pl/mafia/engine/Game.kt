@@ -15,6 +15,8 @@ data class PlayerView(
     val legalVoteTargets: List<PlayerId>,
     val investigations: List<Investigation>,
     val revealedRoles: Map<PlayerId, RoleId>,
+    val claims: List<Claim>,
+    val voteHistory: List<DayVotes>,
 )
 
 // Night -> resolve -> day (vote) -> execution -> win check. No clocks, network or UI;
@@ -32,6 +34,8 @@ class Game private constructor(
     private val votes = linkedMapOf<PlayerId, PlayerId?>()
     private val lastProtected = mutableMapOf<PlayerId, PlayerId>()
     private val knownInvestigations = mutableListOf<Investigation>()
+    private val _claims = mutableListOf<Claim>()
+    private val _voteHistory = mutableListOf<DayVotes>()
 
     val players: List<Player> get() = _players.toList()
     val events: List<GameEvent> get() = _events.toList()
@@ -118,24 +122,39 @@ class Game private constructor(
         votes[voterId] = targetId
     }
 
+    // Claims are only allowed during the day; the target may already be dead.
+    fun submitClaim(speakerId: PlayerId, targetId: PlayerId, claimsMafia: Boolean) {
+        check(phase == Phase.DAY) { "Claims can only be made during the day" }
+        require(player(speakerId).alive) { "Dead player $speakerId cannot make claims" }
+        player(targetId)
+        require(targetId != speakerId) { "Player $speakerId cannot make a claim about themselves" }
+        require(_claims.none { it.speakerId == speakerId && it.targetId == targetId }) {
+            "Player $speakerId already made a claim about $targetId"
+        }
+        _claims += Claim(speakerId, day, targetId, claimsMafia)
+        _events += GameEvent.ClaimMade(speakerId, targetId, claimsMafia)
+    }
+
     fun resolveDay() {
         check(phase == Phase.DAY) { "It is not day" }
         val tally: Map<PlayerId?, Int> = votes.values.groupingBy { it }.eachCount()
-        _events += GameEvent.VotesTallied(tally)
+        _events += GameEvent.VotesTallied(votes.toMap(), tally)
 
+        var executed: PlayerId? = null
         if (tally.isEmpty()) {
             _events += GameEvent.NoExecution(NoExecutionReason.NO_VOTES)
         } else {
             val max = tally.values.max()
             val top: List<PlayerId?> = tally.filterValues { it == max }.keys.toList()
             if (top.size == 1) {
-                executeOrSkip(top.single())
+                executed = executeOrSkip(top.single())
             } else if (config.tieRule == TieRule.RANDOM_AMONG_TIED) {
-                executeOrSkip(top.random(random))
+                executed = executeOrSkip(top.random(random))
             } else {
                 _events += GameEvent.NoExecution(NoExecutionReason.TIE)
             }
         }
+        _voteHistory += DayVotes(day, votes.toMap(), executed)
         votes.clear()
         day++
 
@@ -145,14 +164,15 @@ class Game private constructor(
         }
     }
 
-    private fun executeOrSkip(chosen: PlayerId?) {
+    private fun executeOrSkip(chosen: PlayerId?): PlayerId? {
         if (chosen == null) {
             _events += GameEvent.NoExecution(NoExecutionReason.NOBODY_CHOSEN)
-        } else {
-            val victim = player(chosen)
-            _players[chosen] = victim.copy(alive = false)
-            _events += GameEvent.PlayerExecuted(chosen, victim.role)
+            return null
         }
+        val victim = player(chosen)
+        _players[chosen] = victim.copy(alive = false)
+        _events += GameEvent.PlayerExecuted(chosen, victim.role)
+        return chosen
     }
 
     private fun kill(id: PlayerId) {
@@ -207,6 +227,8 @@ class Game private constructor(
             legalVoteTargets = legalVoteTargets(playerId),
             investigations = knownInvestigations.filter { it.detectiveId == playerId },
             revealedRoles = revealed,
+            claims = _claims.toList(),
+            voteHistory = _voteHistory.toList(),
         )
     }
 

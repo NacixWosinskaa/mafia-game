@@ -4,6 +4,7 @@ import pl.mafia.engine.GameConfig
 import pl.mafia.engine.RoleSetups
 import pl.mafia.engine.TieRule
 import pl.mafia.engine.bots.HeuristicBot
+import pl.mafia.engine.bots.InformedBot
 import pl.mafia.engine.bots.RandomBot
 import kotlin.random.Random
 import kotlin.test.Test
@@ -25,6 +26,16 @@ class SimulationTest {
     fun `heuristic bots finish every game without errors`() {
         val random = Random(2)
         val bot = HeuristicBot(random)
+        for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
+            val stats = simulate(n, 300, GameConfig(), random, bot)
+            assertEquals(300, stats.townWins + stats.mafiaWins)
+        }
+    }
+
+    @Test
+    fun `informed bots finish every game without errors`() {
+        val random = Random(4)
+        val bot = InformedBot(random)
         for (n in RoleSetups.MIN_PLAYERS..RoleSetups.MAX_PLAYERS) {
             val stats = simulate(n, 300, GameConfig(), random, bot)
             assertEquals(300, stats.townWins + stats.mafiaWins)

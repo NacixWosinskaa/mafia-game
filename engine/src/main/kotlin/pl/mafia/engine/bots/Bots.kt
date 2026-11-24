@@ -7,11 +7,15 @@ import pl.mafia.engine.RoleId
 import pl.mafia.engine.Roles
 import kotlin.random.Random
 
+data class ClaimIntent(val targetId: PlayerId, val claimsMafia: Boolean)
+
 interface Bot {
     fun chooseNightTarget(view: PlayerView): PlayerId?
 
     // null means a vote for nobody.
     fun chooseVote(view: PlayerView): PlayerId?
+
+    fun chooseClaims(view: PlayerView): List<ClaimIntent> = emptyList()
 }
 
 class RandomBot(private val random: Random) : Bot {

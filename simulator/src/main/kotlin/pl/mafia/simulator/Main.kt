@@ -4,20 +4,22 @@ import pl.mafia.engine.GameConfig
 import pl.mafia.engine.RoleSetups
 import pl.mafia.engine.bots.Bot
 import pl.mafia.engine.bots.HeuristicBot
+import pl.mafia.engine.bots.InformedBot
 import pl.mafia.engine.bots.RandomBot
 import kotlin.random.Random
 
-// Args (all optional): <games per size> <random|heuristic> <seed>
+// Args (all optional): <games per size> <random|heuristic|informed> <seed>
 fun main(args: Array<String>) {
     val games = args.getOrNull(0)?.toInt() ?: 10_000
-    val botKind = args.getOrNull(1) ?: "heuristic"
+    val botKind = args.getOrNull(1) ?: "informed"
     val seed = args.getOrNull(2)?.toLong() ?: 42L
 
     val random = Random(seed)
     val bot: Bot = when (botKind) {
         "random" -> RandomBot(random)
         "heuristic" -> HeuristicBot(random)
-        else -> error("Unknown bot type: $botKind (expected random or heuristic)")
+        "informed" -> InformedBot(random)
+        else -> error("Unknown bot type: $botKind (expected random, heuristic or informed)")
     }
 
     val config = GameConfig()

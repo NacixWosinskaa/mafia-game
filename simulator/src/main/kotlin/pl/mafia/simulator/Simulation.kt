@@ -34,6 +34,11 @@ fun playGame(playerCount: Int, config: GameConfig, random: Random, bot: Bot): Ga
         if (game.isOver) break
 
         for (player in game.alivePlayers()) {
+            for (claim in bot.chooseClaims(game.viewFor(player.id))) {
+                game.submitClaim(player.id, claim.targetId, claim.claimsMafia)
+            }
+        }
+        for (player in game.alivePlayers()) {
             game.submitVote(player.id, bot.chooseVote(game.viewFor(player.id)))
         }
         game.resolveDay()
