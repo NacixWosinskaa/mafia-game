@@ -29,9 +29,10 @@ object RoleSetups {
 
     private val specialPool = listOf(
         RoleId.DAY_SHOOTER, RoleId.AVENGER, RoleId.JOKER, RoleId.BODYGUARD, RoleId.LOOKOUT,
+        RoleId.MAYOR, RoleId.SHERIFF,
     )
 
-    private val mafiaSpecialPool = listOf(RoleId.GODFATHER, RoleId.BLACKMAILER)
+    private val mafiaSpecialPool = listOf(RoleId.GODFATHER, RoleId.BLACKMAILER, RoleId.POISONER)
 
     // Mafia specials need a table with enough room for a plain mafioso next to them.
     private const val MAFIA_SPECIALS_FROM = 8

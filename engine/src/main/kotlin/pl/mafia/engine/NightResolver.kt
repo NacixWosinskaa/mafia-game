@@ -14,6 +14,8 @@ data class Sighting(
     val visitorIds: List<PlayerId>,
 )
 
+data class RoleCheck(val sheriffId: PlayerId, val targetId: PlayerId, val role: RoleId)
+
 data class Sacrifice(val bodyguardId: PlayerId, val targetId: PlayerId)
 
 data class NightResult(
@@ -25,9 +27,15 @@ data class NightResult(
     val blocks: Map<PlayerId, PlayerId>,
     val investigations: List<Investigation>,
     val sightings: List<Sighting>,
+    val roleChecks: List<RoleCheck>,
+    // poisoner -> victim; takes effect on the next night
+    val poisonings: List<Pair<PlayerId, PlayerId>>,
+    // Poisoned earlier and not protected tonight / protected tonight.
+    val poisonDeaths: List<PlayerId>,
+    val cured: List<PlayerId>,
 )
 
-// Resolution order: block, protect, kill (a guard takes the hit), investigate and watch.
+// Resolution order: block, protect, kill (a guard takes the hit), poison, investigate / examine / watch.
 // Actions are validated by Game beforehand.
 object NightResolver {
 
@@ -36,13 +44,14 @@ object NightResolver {
         actions: Map<PlayerId, PlayerId>,
         killAllowed: Boolean,
         night: Int = 1,
+        poisoned: Set<PlayerId> = emptySet(),
     ): NightResult {
         val byId = players.associateBy { it.id }
 
         fun actionsOf(type: NightActionType): List<Pair<PlayerId, PlayerId>> =
             actions.filter { (actorId, _) ->
                 val actor = byId[actorId]
-                actor != null && actor.alive && actor.definition.nightAction == type
+                actor != null && actor.alive && effectiveNightAction(actor, players) == type
             }.toList()
 
         val blocks = actionsOf(NightActionType.BLOCK).toMap()
@@ -66,6 +75,10 @@ object NightResolver {
             else -> emptyList()
         }
 
+        val poisonDeaths = poisoned.filter { it !in protectedIds && byId[it]?.alive == true && it !in deaths }
+        val cured = poisoned.filter { it in protectedIds && byId[it]?.alive == true }
+        val poisonings = effective(NightActionType.POISON).filter { it.second !in poisoned }
+
         // Results depend only on roles and actions, so they survive the actor's or target's death.
         val investigations = effective(NightActionType.INVESTIGATE)
             .map { (detectiveId, targetId) ->
@@ -83,7 +96,14 @@ object NightResolver {
             }
             .sortedBy { it.lookoutId }
 
-        return NightResult(attacked, deaths, prevented, sacrifice, blocks, investigations, sightings)
+        val roleChecks = effective(NightActionType.EXAMINE)
+            .map { (sheriffId, targetId) -> RoleCheck(sheriffId, targetId, byId.getValue(targetId).role) }
+            .sortedBy { it.sheriffId }
+
+        return NightResult(
+            attacked, deaths, prevented, sacrifice, blocks, investigations, sightings, roleChecks,
+            poisonings, poisonDeaths, cured,
+        )
     }
 
     // Ties go to the lowest player id to keep resolution deterministic.

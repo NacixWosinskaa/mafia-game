@@ -81,13 +81,14 @@ class RoleSetupsTest {
     @Test
     fun `mafia specials need 8 players and leave a plain mafioso`() {
         for ((n, roles) in allSetups()) {
-            val special = roles.count { it == RoleId.GODFATHER || it == RoleId.BLACKMAILER }
+            val special = roles.count { Roles.of(it).faction == Faction.MAFIA && it != RoleId.MAFIOSO }
             if (n < 8) assertEquals(0, special, "mafia specials for $n")
             assertTrue(RoleId.MAFIOSO in roles, "plain mafioso for $n")
             assertTrue(special <= if (n >= 12) 2 else 1, "mafia specials for $n")
         }
         assertTrue(allSetups().any { (_, roles) -> RoleId.GODFATHER in roles })
         assertTrue(allSetups().any { (_, roles) -> RoleId.BLACKMAILER in roles })
+        assertTrue(allSetups().any { (_, roles) -> RoleId.POISONER in roles })
     }
 
     @Test

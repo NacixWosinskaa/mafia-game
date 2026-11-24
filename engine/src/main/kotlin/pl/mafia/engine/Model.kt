@@ -6,10 +6,10 @@ enum class Faction { TOWN, MAFIA, NEUTRAL }
 
 enum class RoleId {
     CITIZEN, MAFIOSO, DETECTIVE, DOCTOR, JOKER, DAY_SHOOTER, AVENGER,
-    GODFATHER, BODYGUARD, BLACKMAILER, LOOKOUT,
+    GODFATHER, BODYGUARD, BLACKMAILER, LOOKOUT, MAYOR, SHERIFF, POISONER,
 }
 
-enum class NightActionType { KILL, PROTECT, INVESTIGATE, GUARD, BLOCK, WATCH }
+enum class NightActionType { KILL, PROTECT, INVESTIGATE, GUARD, BLOCK, WATCH, EXAMINE, POISON }
 
 enum class DayActionType { SHOOT }
 
@@ -27,6 +27,9 @@ data class RoleDefinition(
     val bait: Boolean = false,
     // Detective investigations report this role as not mafia.
     val appearsInnocent: Boolean = false,
+    // How many times a night action may take effect in a game; null = unlimited.
+    val nightActionUses: Int? = null,
+    val voteWeight: Int = 1,
 )
 
 object Roles {
@@ -42,6 +45,9 @@ object Roles {
         RoleDefinition(RoleId.BODYGUARD, Faction.TOWN, NightActionType.GUARD),
         RoleDefinition(RoleId.BLACKMAILER, Faction.MAFIA, NightActionType.BLOCK),
         RoleDefinition(RoleId.LOOKOUT, Faction.TOWN, NightActionType.WATCH),
+        RoleDefinition(RoleId.MAYOR, Faction.TOWN, voteWeight = 2),
+        RoleDefinition(RoleId.SHERIFF, Faction.TOWN, NightActionType.EXAMINE, nightActionUses = 1),
+        RoleDefinition(RoleId.POISONER, Faction.MAFIA, NightActionType.POISON, nightActionUses = 2),
     ).associateBy { it.id }
 
     fun of(id: RoleId): RoleDefinition = definitions.getValue(id)
@@ -58,3 +64,12 @@ data class Player(
 }
 
 enum class Phase { NIGHT, DAY, FINISHED }
+
+// Mafia members whose own ability is not a kill take over the kill when no killer is left alive;
+// otherwise the game could never end.
+fun effectiveNightAction(actor: Player, players: List<Player>): NightActionType? {
+    val own = actor.definition.nightAction
+    if (actor.faction != Faction.MAFIA || own == null || own == NightActionType.KILL) return own
+    val killerAlive = players.any { it.alive && it.faction == Faction.MAFIA && it.definition.nightAction == NightActionType.KILL }
+    return if (killerAlive) own else NightActionType.KILL
+}

@@ -35,16 +35,17 @@ class InformedBot(
                     ?: accusersOfMafia(view).filter { it in options }.randomOrNull(random)
                     ?: options.random(random)
 
-            RoleId.BLACKMAILER ->
+            RoleId.BLACKMAILER, RoleId.POISONER ->
                 accusersOfMafia(view).filter { it in options }.randomOrNull(random) ?: options.random(random)
 
-            RoleId.DETECTIVE -> {
-                val checked = view.investigations.map { it.targetId }.toSet()
+            RoleId.DETECTIVE, RoleId.SHERIFF -> {
+                val checked = (view.investigations.map { it.targetId } + view.roleChecks.map { it.targetId }).toSet()
                 val pool = options.filter { it !in checked }.ifEmpty { options }
                 pickHighest(assess(view, trust).suspicion, pool)
             }
 
             RoleId.DOCTOR, RoleId.BODYGUARD, RoleId.LOOKOUT -> {
+                if (view.poisoned && view.selfId in options) return view.selfId
                 val credibility = assess(view, trust).credibility
                 val accusers = view.claims.filter { it.claimsMafia && it.speakerId in options }.map { it.speakerId }
                 val best = accusers.maxOfOrNull { credibility[it] ?: 0.0 }
@@ -70,7 +71,8 @@ class InformedBot(
 
     override fun chooseClaims(view: PlayerView): List<ClaimIntent> = when (view.role) {
         RoleId.DETECTIVE -> announceResults(view)
-        RoleId.MAFIOSO, RoleId.GODFATHER, RoleId.BLACKMAILER -> bluff(view)
+        RoleId.SHERIFF -> announceRoleChecks(view)
+        RoleId.MAFIOSO, RoleId.GODFATHER, RoleId.BLACKMAILER, RoleId.POISONER -> bluff(view)
         RoleId.LOOKOUT -> accuseVisitors(view)
         RoleId.JOKER -> provoke(view)
         else -> emptyList()
@@ -95,6 +97,14 @@ class InformedBot(
     }
 
     private fun silentToday() = candor < 1.0 && random.nextDouble() >= candor
+
+    private fun announceRoleChecks(view: PlayerView): List<ClaimIntent> {
+        if (silentToday()) return emptyList()
+        val already = claimedBy(view, view.selfId)
+        return view.roleChecks
+            .filter { it.targetId !in already }
+            .map { ClaimIntent(it.targetId, Roles.of(it.role).faction == Faction.MAFIA) }
+    }
 
     private fun announceResults(view: PlayerView): List<ClaimIntent> {
         if (silentToday()) return emptyList()

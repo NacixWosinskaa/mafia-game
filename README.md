@@ -38,12 +38,15 @@ A `Game` is a state machine: night, resolve, day (vote), execution, win check. C
 | Day shooter | town | one shot per game during the day; the target dies at once, can't be protected, role is revealed. If the target is not mafia the shooter dies too |
 | Avenger | town | if the mafia kills them at night, a random living mafioso dies as well (not on a day shot or an execution) |
 | Godfather | mafia | kills like a mafioso; the detective sees them as not mafia |
-| Blackmailer | mafia | does not kill; each night cancels one non-mafia player's night action (they are told they were blocked) |
+| Blackmailer | mafia | does not kill; each night picks one non-mafia player: their night action is cancelled and they cannot vote the next day (they are told) |
+| Poisoner | mafia | does not kill; poisons a non-mafia player, twice per game. The victim is told and dies at the end of the next night unless the doctor protects them that night |
 | Bodyguard | town | guards one player; if the mafia attacks that player, the bodyguard dies instead. The doctor's protection is applied first |
+| Mayor | town | no ability; their vote counts double, nobody is told |
+| Sheriff | town | once per game, learns a player's exact role |
 | Lookout | town | learns who else acted on the chosen player that night (blocked players still count as visitors) |
 | Joker | neutral | wins alone if executed by the vote from day 3 on; executed earlier or dying any other way is just a loss |
 
-Night order: block, protect, kill (a guard takes the hit), investigate and watch. Mafia specials are part of the mafia headcount and count as mafia for the win check.
+Night order: block, protect, kill (a guard takes the hit), poison, investigate / examine / watch. Mafia specials are part of the mafia headcount and count as mafia for the win check. A blackmailer or poisoner becomes the killer when no mafioso or godfather is left, so the game always ends.
 
 Planned, not implemented: the jailor (picks a player at night; that player can't talk, vote or act the next day and has a private chat with the jailor). It needs chat, so it waits for the backend.
 
@@ -51,8 +54,8 @@ Planned, not implemented: the jailor (picks a player at night; that player can't
 
 A setup is built by `RoleSetups` for 6-14 players: mafia count from a table, always one detective, a doctor (guaranteed from 8 players, optional below), a few special roles, citizens for the rest.
 
-- Special roles are drawn without replacement from a pool (shooter, avenger, joker, bodyguard, lookout), so none repeats in a game. Only citizens and mafiosi repeat.
-- Godfather and blackmailer replace mafiosi from 8 players on: at most one below 12 players, two from 12, and always at least one plain mafioso.
+- Special roles are drawn without replacement from a pool (shooter, avenger, joker, bodyguard, lookout, mayor, sheriff), so none repeats in a game. Only citizens and mafiosi repeat.
+- Godfather, blackmailer and poisoner replace mafiosi from 8 players on: at most one below 12 players, two from 12, and always at least one plain mafioso.
 - Below 12 players at most one neutral role and one "bait" role (joker, avenger); from 12, two of each.
 - Mafia by player count: 1 (6), 2 (7-9), 2 or 3 drawn per game (10-11), 3 (12-14).
 - Slots for special roles by player count: 0-1 (6-7, where the doctor is one of them), 1 (8-9), 2 (10-11), 3 (12-14). From 12 players there are around 40 allowed setups per size.
@@ -131,28 +134,31 @@ Town win rate by town temperament (`range` report, 3,000 games per size):
 | --- | --- | --- | --- | --- |
 | 6 | 50.8 | 87.2 | 88.5 | 88.1 |
 | 7 | 12.5 | 64.0 | 66.1 | 72.8 |
-| 8 | 21.0 | 79.2 | 76.0 | 77.9 |
-| 9 | 23.0 | 88.3 | 86.1 | 86.5 |
-| 10 | 17.3 | 81.2 | 81.5 | 80.1 |
-| 11 | 18.6 | 88.1 | 86.3 | 86.6 |
-| 12 | 9.7 | 87.4 | 84.4 | 84.2 |
-| 13 | 11.7 | 88.6 | 87.5 | 85.7 |
-| 14 | 13.8 | 91.2 | 87.6 | 86.1 |
+| 8 | 16.5 | 74.4 | 74.1 | 75.7 |
+| 9 | 20.4 | 85.1 | 84.3 | 85.1 |
+| 10 | 14.2 | 78.3 | 79.6 | 79.7 |
+| 11 | 15.1 | 87.2 | 86.4 | 86.7 |
+| 12 | 8.1 | 85.5 | 82.6 | 82.9 |
+| 13 | 9.5 | 89.2 | 88.5 | 86.1 |
+| 14 | 9.6 | 91.8 | 90.3 | 87.8 |
 
 The three informed styles land within a few points of each other, so the knobs do not produce a realistic middle between "does nothing" and "reasons well". The bots do not model human play well enough to pick absolute win rates from them.
 
-Effect of each special role on the town win rate, in points against the average setup of the same player and mafia count (`effects` report, 500 games per setup):
+Effect of each special role on the town win rate, in points against the average setup of the same player and mafia count (`effects` report, 300 games per setup):
 
 | Role | careless | suspicious | careful | trusting | Spread |
 | --- | --- | --- | --- | --- | --- |
-| Doctor (6-7 players) | +2.5 | +2.4 | +2.3 | +2.3 | 0.1 |
-| Avenger | +6.2 | +3.5 | +4.2 | +4.3 | 2.7 |
-| Lookout | -1.0 | +1.2 | +2.1 | +3.0 | 4.0 |
-| Blackmailer | +1.8 | +0.7 | +1.1 | +1.1 | 1.1 |
-| Bodyguard | -0.9 | +0.5 | +0.6 | +0.4 | 1.4 |
-| Day shooter | -1.0 | +1.4 | +0.6 | +0.3 | 2.4 |
-| Godfather | -1.9 | -2.1 | -3.3 | -4.5 | 2.6 |
-| Joker | -3.1 | -7.0 | -7.8 | -8.4 | 5.4 |
+| Doctor (6-7 players) | +2.5 | +1.8 | +2.2 | +4.0 | 2.2 |
+| Avenger | +5.8 | +3.1 | +3.1 | +3.1 | 2.7 |
+| Sheriff | -1.1 | +1.8 | +2.5 | +3.1 | 4.3 |
+| Lookout | -1.3 | +0.7 | +1.8 | +2.5 | 3.8 |
+| Mayor | +1.4 | +1.1 | +1.2 | +1.0 | 0.4 |
+| Bodyguard | -1.1 | 0.0 | +0.4 | +0.2 | 1.6 |
+| Blackmailer | -0.2 | -0.1 | +0.4 | +0.4 | 0.6 |
+| Day shooter | -1.2 | +1.2 | -0.3 | -0.7 | 2.4 |
+| Godfather | -0.4 | -0.4 | -1.8 | -3.2 | 2.7 |
+| Poisoner | -1.9 | -3.4 | -3.0 | -2.1 | 1.6 |
+| Joker | -2.3 | -8.0 | -8.9 | -9.4 | 7.2 |
 
 The earlier two-column comparison (`heuristic` vs `informed`) is kept above for reference. Treat absolute win rates as unreliable: the spread between bot styles is huge, and real players will land somewhere unknown in between. What does hold across styles is the ranking of roles (table above), so use the simulator to compare setups and spot broken roles, and use real games to set the actual numbers.
 
@@ -160,7 +166,7 @@ Findings so far:
 
 - The joker used to win 28-34% of games whenever present. With the day-3 rule it wins 8-15%.
 - The godfather looked far stronger (-11.5 points) when the mafia only accused people; once mafiosi also vouch for teammates it is -2 to -4.5.
-- The blackmailer is close to neutral for town once the mafia bluffs better, but it still replaces a killer with a role that only blocks.
+- The blackmailer is neutral for town now that its target also loses the vote. The poisoner costs town 2-3 points; the mayor and sheriff each give it 1-3.
 - The joker is the one role whose effect swings a lot between styles (-3 to -8).
 - Bodyguard, lookout and day shooter are close to neutral. The lookout's effect depends on bots acting on its sightings, which humans do better.
 - 13-14 players with 4 mafia were mafia-leaning; 3 mafia is closer to even. The 10-11 player setups with 2 mafia are strongly town-favoured and with 3 mafia mafia-leaning, hence the per-game draw.

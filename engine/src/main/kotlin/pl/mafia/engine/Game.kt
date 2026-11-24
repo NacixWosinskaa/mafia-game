@@ -19,8 +19,11 @@ data class PlayerView(
     val claims: List<Claim>,
     val voteHistory: List<DayVotes>,
     val sightings: List<Sighting>,
-    // Your night action did nothing because the blackmailer picked you.
+    val roleChecks: List<RoleCheck>,
+    // The blackmailer picked you last night: your night action did nothing and you cannot vote today.
     val blockedLastNight: Boolean,
+    // You will die at the end of tonight unless the doctor protects you.
+    val poisoned: Boolean,
     // Night number -> players who died at night (kills, bodyguard sacrifices, avenger revenge).
     val nightDeaths: Map<Int, List<PlayerId>>,
 )
@@ -43,6 +46,9 @@ class Game private constructor(
     private val knownInvestigations = mutableListOf<Investigation>()
     private val knownSightings = mutableListOf<Sighting>()
     private var blockedLastNight = emptySet<PlayerId>()
+    private val knownRoleChecks = mutableListOf<RoleCheck>()
+    private val poisoned = mutableSetOf<PlayerId>()
+    private val nightActionUsed = mutableMapOf<PlayerId, Int>()
     private val _claims = mutableListOf<Claim>()
     private val _voteHistory = mutableListOf<DayVotes>()
 
@@ -76,12 +82,16 @@ class Game private constructor(
     fun legalNightTargets(actorId: PlayerId): List<PlayerId> {
         val actor = player(actorId)
         if (phase != Phase.NIGHT || !actor.alive) return emptyList()
-        val type = actor.definition.nightAction ?: return emptyList()
+        val type = effectiveNightAction(actor, _players) ?: return emptyList()
+        val limit = actor.definition.nightActionUses.takeIf { type == actor.definition.nightAction }
+        if (limit != null && (nightActionUsed[actorId] ?: 0) >= limit) return emptyList()
         return alivePlayers().filter { target ->
             when (type) {
                 NightActionType.KILL -> target.faction != Faction.MAFIA
-                NightActionType.INVESTIGATE, NightActionType.GUARD, NightActionType.WATCH -> target.id != actor.id
+                NightActionType.INVESTIGATE, NightActionType.GUARD, NightActionType.WATCH,
+                NightActionType.EXAMINE -> target.id != actor.id
                 NightActionType.BLOCK -> target.faction != Faction.MAFIA
+                NightActionType.POISON -> target.faction != Faction.MAFIA && target.id !in poisoned
                 NightActionType.PROTECT ->
                     (config.doctorCanSelfProtect || target.id != actor.id) &&
                         (config.doctorCanRepeatTarget || lastProtected[actor.id] != target.id)
@@ -100,7 +110,7 @@ class Game private constructor(
     fun resolveNight() {
         check(phase == Phase.NIGHT) { "It is not night" }
         val killAllowed = day > 1 || config.killOnFirstNight
-        val result = NightResolver.resolve(_players, nightActions, killAllowed, day)
+        val result = NightResolver.resolve(_players, nightActions, killAllowed, day, poisoned.toSet())
         val blocked = result.blocks.values.toSet()
 
         _players.filter { it.alive && it.definition.nightAction == NightActionType.PROTECT }.forEach { doctor ->
@@ -109,7 +119,7 @@ class Game private constructor(
         }
 
         result.blocks.forEach { (blocker, target) -> _events += GameEvent.ActionBlocked(blocker, target) }
-        blockedLastNight = blocked.filter { player(it).definition.nightAction != null }.toSet()
+        blockedLastNight = blocked
         result.preventedAttackOn?.let { _events += GameEvent.AttackPrevented(it) }
         result.sacrifice?.let { _events += GameEvent.BodyguardSacrificed(it.bodyguardId, it.targetId) }
         result.deaths.forEach { id ->
@@ -120,6 +130,30 @@ class Game private constructor(
                     kill(mafioso.id)
                 }
             }
+        }
+        result.cured.forEach {
+            poisoned -= it
+            _events += GameEvent.PoisonCured(it)
+        }
+        result.poisonDeaths.forEach {
+            poisoned -= it
+            if (player(it).alive) {
+                _events += GameEvent.PoisonKilled(it)
+                kill(it)
+            }
+        }
+        poisoned.removeAll { !player(it).alive }
+        result.poisonings.forEach { (poisonerId, targetId) ->
+            if (player(targetId).alive) {
+                poisoned += targetId
+                nightActionUsed.merge(poisonerId, 1, Int::plus)
+                _events += GameEvent.PlayerPoisoned(poisonerId, targetId)
+            }
+        }
+        result.roleChecks.forEach {
+            knownRoleChecks += it
+            nightActionUsed.merge(it.sheriffId, 1, Int::plus)
+            _events += GameEvent.Examined(it.sheriffId, it.targetId, it.role)
         }
         result.investigations.forEach {
             knownInvestigations += it
@@ -137,8 +171,10 @@ class Game private constructor(
         }
     }
 
+    fun canVote(voterId: PlayerId): Boolean = phase == Phase.DAY && player(voterId).alive && voterId !in blockedLastNight
+
     fun legalVoteTargets(voterId: PlayerId): List<PlayerId> {
-        if (phase != Phase.DAY || !player(voterId).alive) return emptyList()
+        if (!canVote(voterId)) return emptyList()
         return alivePlayers().map { it.id }.filter { it != voterId }
     }
 
@@ -146,6 +182,7 @@ class Game private constructor(
     fun submitVote(voterId: PlayerId, targetId: PlayerId?) {
         check(phase == Phase.DAY) { "Votes can only be submitted during the day" }
         require(player(voterId).alive) { "Dead player $voterId cannot vote" }
+        require(voterId !in blockedLastNight) { "Player $voterId was blackmailed and cannot vote today" }
         if (targetId != null) {
             require(targetId in legalVoteTargets(voterId)) { "Illegal vote target $targetId" }
         }
@@ -197,7 +234,9 @@ class Game private constructor(
         val validVotes = votes.filter { (voter, target) ->
             player(voter).alive && (target == null || player(target).alive)
         }
-        val tally: Map<PlayerId?, Int> = validVotes.values.groupingBy { it }.eachCount()
+        val tally: Map<PlayerId?, Int> = validVotes.entries
+            .groupBy({ it.value }, { player(it.key).definition.voteWeight })
+            .mapValues { it.value.sum() }
         _events += GameEvent.VotesTallied(validVotes, tally)
         val today = day
         val aliveBefore = alivePlayers().size
@@ -280,10 +319,10 @@ class Game private constructor(
         }
         val teammateChoice = nightActions.entries
             .firstOrNull { (actor, _) ->
-                actor in teammates && player(actor).let { it.alive && it.definition.nightAction == NightActionType.KILL }
+                actor in teammates && player(actor).let { it.alive && effectiveNightAction(it, _players) == NightActionType.KILL }
             }
             ?.value
-            ?.takeIf { me.definition.nightAction == NightActionType.KILL }
+            ?.takeIf { effectiveNightAction(me, _players) == NightActionType.KILL }
         val revealed = buildMap<PlayerId, RoleId> {
             _events.forEach {
                 when (it) {
@@ -317,7 +356,9 @@ class Game private constructor(
             claims = _claims.toList(),
             voteHistory = _voteHistory.toList(),
             sightings = knownSightings.filter { it.lookoutId == playerId },
+            roleChecks = knownRoleChecks.filter { it.sheriffId == playerId },
             blockedLastNight = playerId in blockedLastNight,
+            poisoned = playerId in poisoned,
             nightDeaths = nightDeaths,
         )
     }

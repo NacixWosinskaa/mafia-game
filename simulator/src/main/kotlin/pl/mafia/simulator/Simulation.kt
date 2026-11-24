@@ -51,6 +51,7 @@ fun playGame(game: Game, bot: Bot): GameOutcome {
         if (game.isOver) break
 
         for (player in game.alivePlayers()) {
+            if (!game.canVote(player.id)) continue
             game.submitVote(player.id, bot.chooseVote(game.viewFor(player.id)))
         }
         game.resolveDay()

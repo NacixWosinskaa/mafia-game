@@ -29,7 +29,8 @@ internal fun assess(view: PlayerView, trust: Double = 1.0): Assessment {
     fun revealedMafia(id: PlayerId): Boolean? =
         view.revealedRoles[id]?.let { Roles.of(it).faction == Faction.MAFIA }
 
-    val ownResults = view.investigations.associate { it.targetId to it.isMafia }
+    val ownResults = view.investigations.associate { it.targetId to it.isMafia } +
+        view.roleChecks.associate { it.targetId to (Roles.of(it.role).faction == Faction.MAFIA) }
 
     fun knownMafia(id: PlayerId): Boolean? = when {
         id == view.selfId -> Roles.of(view.role).faction == Faction.MAFIA
